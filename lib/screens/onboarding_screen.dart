@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../l10n/app_strings.dart';
 import 'login_screen.dart';
 import 'main_navigation_shell.dart';
 
@@ -14,34 +15,90 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
 
-  final List<Map<String, String>> _slides = [
-    {
-      'title': 'Find Parking in Addis Ababa',
-      'description': 'Real-time availability maps guide you to open spots in Bole, Kazanchis, Piassa, and Meskel Square.',
-      'imageUrl': 'assets/logo.png',
-      'badgeType': 'logo',
-    },
-    {
-      'title': 'Book with Telebirr & CBE Birr',
-      'description': 'Secure your spot instantly using Telebirr or CBE Birr with frictionless digital payments.',
-      'imageUrl': 'https://lh3.googleusercontent.com/aida-public/AB6AXuCS41aC77JaAV_jRQpYiYPLcz1WkSF4F6QAgQxIlViViqY3z8O5D8bmkcppXtswkU66kn-C_E7vX9JZcoHl8LqpTXBXK1lTQIULrSAheD0-eRsIxYupenIojtx_JTP0fXojgleSaJRjFPh_vPQsfAWcazEeaWV-9bV6FsuMdAamPGEY1eza7fzY_LpcY0rkn2u6U1MnaurM2XW14NI6CBtNbj0Se9OLajM-N5oz-6U76zTF--_oXk8',
-      'badgeType': 'reserved',
-    },
-    {
-      'title': 'Scan & Park in Addis',
-      'description': 'Breeze through gate barriers across Addis Ababa using your secure digital QR pass. No tickets needed.',
-      'imageUrl': 'https://lh3.googleusercontent.com/aida-public/AB6AXuCOOlIO7QUkKm8uhj2Mty8ZNro61SGNuCG4twLNUk1ruMAK5NmxnVpQgWoUGC6POwekvEYB23ILeX63rssyWPas2ZnWekPYpc0i8m8zcBtDk05X-DzQAlTlpKsmOiVNh2gShxb1ZS6E2vNOuhL2nePm4bbA2rZsn0ClxYropQwvSPNgWsAi_YERmIBo14pC2s50PGdbBWO_KEC8IKCpFoh8jG-ARjJLG0n6EQh9lTupjEmHA0RMMQ4',
-      'badgeType': 'qr',
-    },
-  ];
+  void _showLanguageDialog(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  child: Text(
+                    'Select Language / ቋንቋ ይምረጡ',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ListTile(
+                  leading: const Text('🇬🇧', style: TextStyle(fontSize: 24)),
+                  title: const Text('English (US)', style: TextStyle(fontWeight: FontWeight.w600)),
+                  trailing: !LanguageController.instance.isAmharic
+                      ? const Icon(Icons.check_circle, color: AppColors.primary)
+                      : null,
+                  onTap: () {
+                    LanguageController.instance.setLanguage(AppLanguage.english);
+                    Navigator.pop(ctx);
+                  },
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Text('🇪🇹', style: TextStyle(fontSize: 24)),
+                  title: const Text('አማርኛ (Amharic)', style: TextStyle(fontWeight: FontWeight.w600)),
+                  trailing: LanguageController.instance.isAmharic
+                      ? const Icon(Icons.check_circle, color: AppColors.primary)
+                      : null,
+                  onTap: () {
+                    LanguageController.instance.setLanguage(AppLanguage.amharic);
+                    Navigator.pop(ctx);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Column(
+    return ListenableBuilder(
+      listenable: LanguageController.instance,
+      builder: (context, _) {
+        final List<Map<String, String>> _slides = [
+          {
+            'title': AppStrings.onboardingTitle1,
+            'description': AppStrings.onboardingDesc1,
+            'imageUrl': 'assets/logo.png',
+            'badgeType': 'logo',
+          },
+          {
+            'title': AppStrings.onboardingTitle2,
+            'description': AppStrings.onboardingDesc2,
+            'imageUrl': 'https://lh3.googleusercontent.com/aida-public/AB6AXuCS41aC77JaAV_jRQpYiYPLcz1WkSF4F6QAgQxIlViViqY3z8O5D8bmkcppXtswkU66kn-C_E7vX9JZcoHl8LqpTXBXK1lTQIULrSAheD0-eRsIxYupenIojtx_JTP0fXojgleSaJRjFPh_vPQsfAWcazEeaWV-9bV6FsuMdAamPGEY1eza7fzY_LpcY0rkn2u6U1MnaurM2XW14NI6CBtNbj0Se9OLajM-N5oz-6U76zTF--_oXk8',
+            'badgeType': 'reserved',
+          },
+          {
+            'title': AppStrings.onboardingTitle3,
+            'description': AppStrings.onboardingDesc3,
+            'imageUrl': 'https://lh3.googleusercontent.com/aida-public/AB6AXuCOOlIO7QUkKm8uhj2Mty8ZNro61SGNuCG4twLNUk1ruMAK5NmxnVpQgWoUGC6POwekvEYB23ILeX63rssyWPas2ZnWekPYpc0i8m8zcBtDk05X-DzQAlTlpKsmOiVNh2gShxb1ZS6E2vNOuhL2nePm4bbA2rZsn0ClxYropQwvSPNgWsAi_YERmIBo14pC2s50PGdbBWO_KEC8IKCpFoh8jG-ARjJLG0n6EQh9lTupjEmHA0RMMQ4',
+            'badgeType': 'qr',
+          },
+        ];
+
+        return Scaffold(
+          body: SafeArea(
+            child: Column(
           children: [
-            // Top Bar with ParkEase Logo & Skip Button
+            // Top Bar with ParkEase Logo, Language Selector & Skip Button
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               child: Row(
@@ -65,9 +122,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      const Text(
-                        'ParkEase ',
-                        style: TextStyle(
+                      Text(
+                        AppStrings.appName + ' ',
+                        style: const TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.bold,
                           color: AppColors.primary,
@@ -77,21 +134,29 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       const Text('🇪🇹', style: TextStyle(fontSize: 18)),
                     ],
                   ),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(builder: (_) => const MainNavigationShell()),
-                      );
-                    },
-                    child: const Text(
-                      'Skip',
-                      style: TextStyle(
-                        fontSize: 15,
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w500,
+                  Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.language, color: AppColors.primary),
+                        onPressed: () => _showLanguageDialog(context),
                       ),
-                    ),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(builder: (_) => const MainNavigationShell()),
+                          );
+                        },
+                        child: Text(
+                          AppStrings.skip,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            color: AppColors.textSecondary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -304,7 +369,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(_currentPage == _slides.length - 1 ? 'Get Started' : 'Next'),
+                      Text(_currentPage == _slides.length - 1 ? AppStrings.getStarted : AppStrings.next),
                       const SizedBox(width: 8),
                       Icon(
                         _currentPage == _slides.length - 1 ? Icons.rocket_launch : Icons.arrow_forward,
@@ -320,5 +385,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         ),
       ),
     );
+  });
   }
 }

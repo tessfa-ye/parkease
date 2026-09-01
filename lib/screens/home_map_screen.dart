@@ -4,6 +4,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import '../models/parking_spot.dart';
 import '../theme/app_theme.dart';
+import '../l10n/app_strings.dart';
 import 'spot_details_screen.dart';
 
 class HomeMapScreen extends StatefulWidget {
@@ -19,7 +20,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   final List<ParkingSpot> _spots = ParkingSpot.sampleSpots;
   final Set<Marker> _markers = {};
   ParkingSpot? _selectedSpot;
-  String _activeFilter = 'All';
+  String _activeFilterKey = 'all';
   bool _isLocating = false;
 
   // Default: Addis Ababa center (used until GPS loads)
@@ -28,7 +29,14 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     zoom: 14.5,
   );
 
-  final List<String> _filters = ['All', 'Government', 'Private', 'Covered', 'EV'];
+  List<Map<String, String>> get _filterOptions => [
+    {'key': 'all', 'label': AppStrings.all},
+    {'key': 'commercial', 'label': AppStrings.commercial},
+    {'key': 'government', 'label': AppStrings.government},
+    {'key': 'private', 'label': AppStrings.privateHost},
+    {'key': 'covered', 'label': AppStrings.covered},
+    {'key': 'ev', 'label': AppStrings.ev},
+  ];
 
   @override
   void initState() {
@@ -91,17 +99,20 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   }
 
   List<ParkingSpot> get _filteredSpots {
-    if (_activeFilter == 'All') return _spots;
-    if (_activeFilter == 'Government') {
+    if (_activeFilterKey == 'all') return _spots;
+    if (_activeFilterKey == 'commercial') {
+      return _spots.where((s) => s.spotType == SpotType.commercial).toList();
+    }
+    if (_activeFilterKey == 'government') {
       return _spots.where((s) => s.spotType == SpotType.government).toList();
     }
-    if (_activeFilter == 'Private') {
+    if (_activeFilterKey == 'private') {
       return _spots.where((s) => s.spotType == SpotType.privateHost).toList();
     }
-    if (_activeFilter == 'Covered') {
+    if (_activeFilterKey == 'covered') {
       return _spots.where((s) => s.amenities.contains('Covered')).toList();
     }
-    if (_activeFilter == 'EV') {
+    if (_activeFilterKey == 'ev') {
       return _spots.where((s) => s.amenities.contains('EV Charging')).toList();
     }
     return _spots;
@@ -149,7 +160,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                   ),
                   child: TextField(
                     decoration: InputDecoration(
-                      hintText: 'Search parking near you...',
+                      hintText: AppStrings.searchParking,
                       hintStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
                       prefixIcon: const Icon(Icons.search, color: AppColors.primary),
                       suffixIcon: Container(
@@ -172,13 +183,13 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
-                    children: _filters.map((filter) {
-                      final isActive = _activeFilter == filter;
+                    children: _filterOptions.map((opt) {
+                      final isActive = _activeFilterKey == opt['key'];
                       return Padding(
                         padding: const EdgeInsets.only(right: 8),
                         child: GestureDetector(
                           onTap: () {
-                            setState(() => _activeFilter = filter);
+                            setState(() => _activeFilterKey = opt['key']!);
                             _buildMarkers();
                           },
                           child: AnimatedContainer(
@@ -195,7 +206,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                               ],
                             ),
                             child: Text(
-                              filter,
+                              opt['label']!,
                               style: TextStyle(
                                 color: isActive ? Colors.white : AppColors.textPrimary,
                                 fontWeight: FontWeight.w600,
@@ -267,8 +278,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                       children: [
                         Text(
                           _selectedSpot != null
-                              ? 'Selected Spot'
-                              : 'Nearby Parking (${_filteredSpots.length})',
+                              ? AppStrings.availability
+                              : '${AppStrings.nearbyParking} (${_filteredSpots.length})',
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,

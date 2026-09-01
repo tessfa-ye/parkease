@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../l10n/app_strings.dart';
 import 'login_screen.dart';
 import 'host_registration_screen.dart';
 
@@ -11,7 +12,7 @@ class ProfileScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('My Profile'),
+        title: Text(AppStrings.myProfile),
         elevation: 0,
       ),
       body: SingleChildScrollView(
@@ -79,10 +80,10 @@ class ProfileScreen extends StatelessWidget {
 
             const SizedBox(height: 28),
 
-            // My Vehicles Section (Matching Stitch AI UI)
-            const Text(
-              'MY VEHICLES',
-              style: TextStyle(
+            // My Vehicles Section
+            Text(
+              AppStrings.myVehicles,
+              style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
                 color: AppColors.textSecondary,
@@ -133,7 +134,7 @@ class ProfileScreen extends StatelessWidget {
               child: OutlinedButton.icon(
                 onPressed: () {},
                 icon: const Icon(Icons.add, size: 18),
-                label: const Text('Add Vehicle'),
+                label: Text(AppStrings.addVehicle),
                 style: OutlinedButton.styleFrom(
                   side: const BorderSide(color: AppColors.border),
                 ),
@@ -160,26 +161,26 @@ class ProfileScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Row(
-                  children: const [
-                    Text('🏠', style: TextStyle(fontSize: 36)),
-                    SizedBox(width: 14),
+                  children: [
+                    const Text('🏠', style: TextStyle(fontSize: 36)),
+                    const SizedBox(width: 14),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Become a Host & Earn',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                            AppStrings.becomeHost,
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                           ),
-                          SizedBox(height: 3),
+                          const SizedBox(height: 3),
                           Text(
-                            'List your free parking space and earn money from every booking.',
-                            style: TextStyle(fontSize: 12, color: Colors.white70),
+                            AppStrings.becomeHostDesc,
+                            style: const TextStyle(fontSize: 12, color: Colors.white70),
                           ),
                         ],
                       ),
                     ),
-                    Icon(Icons.chevron_right, color: Colors.white),
+                    const Icon(Icons.chevron_right, color: Colors.white),
                   ],
                 ),
               ),
@@ -188,9 +189,9 @@ class ProfileScreen extends StatelessWidget {
             const SizedBox(height: 28),
 
             // Settings List Section
-            const Text(
-              'SETTINGS',
-              style: TextStyle(
+            Text(
+              AppStrings.settings,
+              style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
                 color: AppColors.textSecondary,
@@ -204,11 +205,11 @@ class ProfileScreen extends StatelessWidget {
                 children: [
                   _buildSettingTile(Icons.credit_card, 'Payment Methods (Telebirr & CBE)', () {}),
                   const Divider(height: 1),
-                  _buildSettingTile(Icons.notifications_outlined, 'Notifications & Alerts', () {}),
+                  _buildSettingTile(Icons.notifications_outlined, AppStrings.notifications, () {}),
                   const Divider(height: 1),
-                  _buildSettingTile(Icons.help_outline, 'Help & Support', () {}),
+                  _buildSettingTile(Icons.help_outline, AppStrings.helpSupport, () {}),
                   const Divider(height: 1),
-                  _buildSettingTile(Icons.info_outline, 'About ParkEase Ethiopia', () {}),
+                  _buildSettingTile(Icons.info_outline, AppStrings.aboutApp, () {}),
                 ],
               ),
             ),
@@ -228,7 +229,7 @@ class ProfileScreen extends StatelessWidget {
                   );
                 },
                 icon: const Icon(Icons.logout, color: AppColors.full),
-                label: const Text('Sign Out', style: TextStyle(color: AppColors.full, fontWeight: FontWeight.bold)),
+                label: Text(AppStrings.signOut, style: const TextStyle(color: AppColors.full, fontWeight: FontWeight.bold)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.full.withValues(alpha: 0.1),
                   elevation: 0,
