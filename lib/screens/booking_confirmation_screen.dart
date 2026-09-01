@@ -10,7 +10,7 @@ class BookingConfirmationScreen extends StatefulWidget {
   const BookingConfirmationScreen({
     super.key,
     required this.spot,
-    required this.durationHours,
+    this.durationHours = 2,
   });
 
   @override
@@ -19,20 +19,22 @@ class BookingConfirmationScreen extends StatefulWidget {
 
 class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
   String _selectedVehicle = 'Code 3 - A24561 AA (Toyota Vitz)';
-  String _selectedPaymentMethod = 'Telebirr (Ethio Telecom)';
+  String _selectedPaymentMethod = 'Telebirr / Mobile Wallet';
 
   final List<String> _vehicles = [
     'Code 3 - A24561 AA (Toyota Vitz)',
     'Code 3 - B98765 AA (Hyundai Tucson)',
     'Code 2 - C11223 AA (Suzuki Dzire)',
+    'Standard Sedan (ABC-1234)',
   ];
 
   @override
   Widget build(BuildContext context) {
-    final subtotal = widget.spot.pricePerHourETB * widget.durationHours;
-    const serviceFee = 10.00;
-    const tax = 5.00;
+    final subtotal = widget.spot.pricePerHour * widget.durationHours;
+    final serviceFee = widget.spot.countryCode == 'ET' ? 10.00 : 1.50;
+    final tax = widget.spot.countryCode == 'ET' ? 5.00 : 0.75;
     final grandTotal = subtotal + serviceFee + tax;
+    final currency = widget.spot.currencySymbol;
 
     return Scaffold(
       appBar: AppBar(
@@ -112,7 +114,7 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
 
             // Vehicle Selector
             const Text(
-              'Select Vehicle (Ethiopia)',
+              'Select Vehicle',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
             ),
             const SizedBox(height: 12),
@@ -131,22 +133,23 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
 
             const SizedBox(height: 24),
 
-            // Payment Options for Ethiopia
+            // Payment Options
             const Text(
-              'Ethiopian Payment Method',
+              'Payment Method',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
             ),
             const SizedBox(height: 12),
-            _buildPaymentOption('Telebirr (Ethio Telecom)', Icons.phone_android),
-            _buildPaymentOption('CBE Birr (Commercial Bank of Ethiopia)', Icons.account_balance),
-            _buildPaymentOption('Chapa Gateway (Cards & Banks)', Icons.credit_card),
+            _buildPaymentOption('Telebirr / Mobile Wallet', Icons.phone_android),
+            _buildPaymentOption('CBE Birr / Bank Transfer', Icons.account_balance),
+            _buildPaymentOption('Credit / Debit Card (Chapa / Stripe)', Icons.credit_card),
+            _buildPaymentOption('Apple Pay / Google Pay', Icons.payment),
 
             const SizedBox(height: 24),
 
             // Price Breakdown Card
-            const Text(
-              'Payment Breakdown (ETB)',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+            Text(
+              'Payment Breakdown ($currency)',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
             ),
             const SizedBox(height: 12),
             Card(
@@ -154,13 +157,13 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   children: [
-                    _buildRowDetail('Parking Fee (${widget.durationHours} hrs)', '${subtotal.toStringAsFixed(0)} ETB'),
+                    _buildRowDetail('Parking Fee (${widget.durationHours} hrs)', '$currency ${subtotal.toStringAsFixed(0)}'),
                     const SizedBox(height: 8),
-                    _buildRowDetail('Service Fee', '${serviceFee.toStringAsFixed(0)} ETB'),
+                    _buildRowDetail('Service Fee', '$currency ${serviceFee.toStringAsFixed(0)}'),
                     const SizedBox(height: 8),
-                    _buildRowDetail('City Tax', '${tax.toStringAsFixed(0)} ETB'),
+                    _buildRowDetail('City Tax', '$currency ${tax.toStringAsFixed(0)}'),
                     const Divider(height: 24),
-                    _buildRowDetail('Total Amount', '${grandTotal.toStringAsFixed(0)} ETB', isBold: true),
+                    _buildRowDetail('Total Amount', '$currency ${grandTotal.toStringAsFixed(0)}', isBold: true),
                   ],
                 ),
               ),
@@ -186,7 +189,7 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
                     ),
                   );
                 },
-                child: const Text('Pay with Telebirr & Reserve'),
+                child: Text('Pay $currency ${grandTotal.toStringAsFixed(0)} & Reserve'),
               ),
             ),
             const SizedBox(height: 16),

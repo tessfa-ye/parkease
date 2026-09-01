@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl_phone_field/intl_phone_field.dart';
 import '../theme/app_theme.dart';
 import 'main_navigation_shell.dart';
 
@@ -10,10 +11,10 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _phoneController = TextEditingController();
-  final String _selectedCountryCode = '+251';
+  String _fullPhoneNumber = '';
 
   void _continue() {
+    debugPrint('Continuing with phone: $_fullPhoneNumber');
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => const MainNavigationShell()),
@@ -32,7 +33,7 @@ class _LoginScreenState extends State<LoginScreen> {
             children: [
               const SizedBox(height: 24),
 
-              // ParkEase Logo Image
+              // ParkEase Logo
               Container(
                 width: 72,
                 height: 72,
@@ -62,9 +63,9 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 24),
 
               const Text(
-                'ParkEase Addis Ababa',
+                'ParkEase',
                 style: TextStyle(
-                  fontSize: 26,
+                  fontSize: 28,
                   fontWeight: FontWeight.bold,
                   color: AppColors.primary,
                   letterSpacing: -0.5,
@@ -74,7 +75,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 8),
 
               const Text(
-                'Enter your Ethiopian phone number to continue',
+                'Enter your phone number to continue',
                 style: TextStyle(
                   fontSize: 14,
                   color: AppColors.textSecondary,
@@ -83,61 +84,37 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 36),
 
-              // Phone Input Container with Ethiopian Country Code (+251)
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.border),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.04),
-                      blurRadius: 6,
-                    ),
-                  ],
+              // International Phone Input — auto-detects country
+              IntlPhoneField(
+                decoration: InputDecoration(
+                  labelText: 'Phone Number',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: AppColors.border),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: AppColors.border),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                  ),
+                  filled: true,
+                  fillColor: Colors.white,
                 ),
-                child: Row(
-                  children: [
-                    // Country Code Badge
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-                      child: Row(
-                        children: [
-                          const Text('🇪🇹', style: TextStyle(fontSize: 20)),
-                          const SizedBox(width: 6),
-                          Text(
-                            _selectedCountryCode,
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                          ),
-                          const Icon(Icons.keyboard_arrow_down, size: 18, color: AppColors.textSecondary),
-                        ],
-                      ),
-                    ),
-
-                    Container(width: 1, height: 28, color: AppColors.border),
-
-                    // Phone Text Field
-                    Expanded(
-                      child: TextField(
-                        controller: _phoneController,
-                        keyboardType: TextInputType.phone,
-                        decoration: const InputDecoration(
-                          hintText: '91 123 4567',
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(horizontal: 16),
-                          fillColor: Colors.transparent,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                initialCountryCode: 'ET', // Default Ethiopia, user can change
+                onChanged: (phone) {
+                  _fullPhoneNumber = phone.completeNumber;
+                },
+                onCountryChanged: (country) {
+                  // Country code updated dynamically
+                },
               ),
 
               const SizedBox(height: 24),
 
-              // Primary Action Button
+              // Primary Continue Button
               SizedBox(
                 width: double.infinity,
                 height: 52,
@@ -168,9 +145,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 ],
               ),
 
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
 
-              // Telebirr Quick Sign-In Option
+              // Telebirr (shown for Ethiopian numbers)
               SizedBox(
                 width: double.infinity,
                 height: 52,
@@ -183,7 +160,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: const [
-                      Icon(Icons.phone_android, size: 22, color: Colors.white),
+                      Icon(Icons.phone_android, size: 22),
                       SizedBox(width: 12),
                       Text(
                         'Continue with Telebirr',
@@ -196,7 +173,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 12),
 
-              // Google Login Button
+              // Google Sign-In
               SizedBox(
                 width: double.infinity,
                 height: 52,
@@ -213,10 +190,50 @@ class _LoginScreenState extends State<LoginScreen> {
                       SizedBox(width: 12),
                       Text(
                         'Continue with Google',
-                        style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ],
                   ),
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              // Apple Sign-In
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: OutlinedButton(
+                  onPressed: _continue,
+                  style: OutlinedButton.styleFrom(
+                    backgroundColor: Colors.black,
+                    side: const BorderSide(color: Colors.black),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      Icon(Icons.apple, size: 22, color: Colors.white),
+                      SizedBox(width: 12),
+                      Text(
+                        'Continue with Apple',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              Text(
+                'By continuing, you agree to our Terms of Service\nand Privacy Policy.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: AppColors.textSecondary.withValues(alpha: 0.7),
                 ),
               ),
             ],

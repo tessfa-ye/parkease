@@ -3,78 +3,55 @@ import '../models/parking_spot.dart';
 import '../theme/app_theme.dart';
 import 'booking_confirmation_screen.dart';
 
-class SpotDetailsScreen extends StatefulWidget {
+class SpotDetailsScreen extends StatelessWidget {
   final ParkingSpot spot;
-
   const SpotDetailsScreen({super.key, required this.spot});
 
   @override
-  State<SpotDetailsScreen> createState() => _SpotDetailsScreenState();
-}
-
-class _SpotDetailsScreenState extends State<SpotDetailsScreen> {
-  int _selectedHours = 2;
-  bool _isFavorite = false;
-
-  @override
   Widget build(BuildContext context) {
-    final totalAmountETB = widget.spot.pricePerHourETB * _selectedHours;
-
     return Scaffold(
+      backgroundColor: AppColors.background,
       body: CustomScrollView(
         slivers: [
-          // Hero Image Header with Top Bar
+          // Hero Photo Header
           SliverAppBar(
-            expandedHeight: 280,
+            expandedHeight: 220,
             pinned: true,
-            leading: Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: CircleAvatar(
-                backgroundColor: Colors.white.withValues(alpha: 0.9),
-                child: IconButton(
-                  icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ),
-            ),
-            actions: [
-              Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: CircleAvatar(
-                  backgroundColor: Colors.white.withValues(alpha: 0.9),
-                  child: IconButton(
-                    icon: Icon(
-                      _isFavorite ? Icons.favorite : Icons.favorite_border,
-                      color: _isFavorite ? Colors.red : AppColors.textPrimary,
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        _isFavorite = !_isFavorite;
-                      });
-                    },
-                  ),
-                ),
-              ),
-            ],
+            backgroundColor: AppColors.primary,
             flexibleSpace: FlexibleSpaceBar(
-              background: Image.network(
-                'https://lh3.googleusercontent.com/aida-public/AB6AXuD4Mxc025bGSEX8MRd58dN49t-xWWNWTMhB2yF2SZSGBgeyC40YxIAFStPgU1hn9eHeMCSna1O0zyQ9p-zaFUAu2YxF9MdpvBfyukJjH3NuB3a0DgxbmczRcS6YmHCgFtP9J1FINxU36ryepeA95DRerk2MojxnPCcrJsLLr6Mxk7F5VlJzk93msvjlspKchvUo5rCTbx7FRTllaW_P4YWQzylbuVnsDwAK2BrZaCg1hCnElwKa_LE',
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Image.network(widget.spot.imageUrl, fit: BoxFit.cover),
+              background: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.network(
+                    spot.imageUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      color: AppColors.primaryContainer,
+                      child: const Icon(Icons.local_parking, size: 80, color: AppColors.primary),
+                    ),
+                  ),
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Colors.transparent, Colors.black.withValues(alpha: 0.5)],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
 
-          // Main Sheet Content
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.all(20.0),
+              padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Title & Rating & Price
+                  // Title + Spot Type Badge
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(
@@ -82,253 +59,254 @@ class _SpotDetailsScreenState extends State<SpotDetailsScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              widget.spot.title,
+                              spot.title,
                               style: const TextStyle(
                                 fontSize: 22,
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.textPrimary,
-                                letterSpacing: -0.5,
                               ),
                             ),
-                            const SizedBox(height: 6),
+                            const SizedBox(height: 4),
                             Row(
                               children: [
-                                const Icon(Icons.star, size: 18, color: Colors.amber),
+                                const Icon(Icons.location_on, size: 14, color: AppColors.textSecondary),
                                 const SizedBox(width: 4),
                                 Text(
-                                  '${widget.spot.rating} (124 reviews)',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.textSecondary,
-                                    fontSize: 14,
-                                  ),
+                                  '${spot.address}, ${spot.city}',
+                                  style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
                                 ),
                               ],
                             ),
                           ],
                         ),
                       ),
+                      // Spot type badge
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                         decoration: BoxDecoration(
-                          color: AppColors.primaryContainer.withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                          color: spot.spotTypeColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: spot.spotTypeColor.withValues(alpha: 0.3)),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              '${widget.spot.pricePerHourETB.toStringAsFixed(0)} Br',
-                              style: const TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.primary,
-                              ),
-                            ),
-                            const Text(
-                              'PER HOUR',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                          ],
+                        child: Text(
+                          spot.spotType == SpotType.privateHost ? '🏠 ${spot.spotTypeLabel}' : '🅿️ ${spot.spotTypeLabel}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: spot.spotTypeColor,
+                          ),
                         ),
                       ),
                     ],
                   ),
 
-                  const SizedBox(height: 20),
-                  const Divider(),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
+
+                  // Private Host Card (only for private hosts)
+                  if (spot.spotType == SpotType.privateHost && spot.hostName != null)
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF7ED),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFEA580C).withValues(alpha: 0.2)),
+                      ),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 24,
+                            backgroundImage: spot.hostPhotoUrl != null
+                                ? NetworkImage(spot.hostPhotoUrl!)
+                                : null,
+                            child: spot.hostPhotoUrl == null
+                                ? const Icon(Icons.person)
+                                : null,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Hosted by ${spot.hostName}',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                ),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.star, size: 13, color: Color(0xFFF59E0B)),
+                                    const SizedBox(width: 3),
+                                    Text(
+                                      '${spot.hostRating?.toStringAsFixed(1) ?? '4.9'} • Private Host',
+                                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.chat_bubble_outline, color: AppColors.primary, size: 22),
+                            onPressed: () {},
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  if (spot.spotType == SpotType.privateHost) const SizedBox(height: 16),
 
                   // Quick Info Grid
                   GridView.count(
-                    crossAxisCount: 2,
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    childAspectRatio: 2.5,
-                    crossAxisSpacing: 12,
+                    crossAxisCount: 2,
                     mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: 2.4,
                     children: [
-                      _buildInfoTile(Icons.directions_walk, 'Distance', '${widget.spot.distanceKm} km', AppColors.primary),
-                      _buildInfoTile(Icons.height, 'Clearance', "2.2m Max", AppColors.primary),
-                      _buildInfoTile(Icons.check_circle, 'Status', widget.spot.statusLabel, widget.spot.statusColor),
-                      _buildInfoTile(Icons.schedule, 'Hours', '24/7 Access', AppColors.primary),
+                      _infoTile(Icons.attach_money, spot.formattedPrice, 'Price'),
+                      _infoTile(Icons.near_me, spot.formattedDistance, 'Distance'),
+                      _infoTile(
+                        Icons.local_parking,
+                        '${spot.availableSpots}/${spot.totalSpots} free',
+                        'Availability',
+                      ),
+                      _infoTile(Icons.star, '${spot.rating} (${spot.reviewCount})', 'Rating'),
                     ],
                   ),
 
-                  const SizedBox(height: 24),
-                  const Divider(),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
 
-                  // Amenities Grid (Telebirr, EV, Security, Covered)
-                  const Text(
-                    'Amenities & Payment Methods',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                  ),
-                  const SizedBox(height: 14),
-                  GridView.count(
-                    crossAxisCount: 2,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    childAspectRatio: 2.2,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                    children: [
-                      _buildAmenityCard(Icons.phone_android, 'Telebirr Pay'),
-                      _buildAmenityCard(Icons.roofing, 'Covered Parking'),
-                      _buildAmenityCard(Icons.security, '24/7 Security'),
-                      _buildAmenityCard(Icons.ev_station, 'EV Charging'),
-                    ],
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // Duration Selector
-                  const Text(
-                    'Select Parking Duration',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: List.generate(6, (index) {
-                      final hours = index + 1;
-                      final isSelected = _selectedHours == hours;
-                      return ChoiceChip(
-                        label: Text('$hours h'),
-                        selected: isSelected,
-                        selectedColor: AppColors.primary,
-                        labelStyle: TextStyle(
-                          color: isSelected ? Colors.white : AppColors.textPrimary,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                        ),
-                        onSelected: (selected) {
-                          if (selected) {
-                            setState(() {
-                              _selectedHours = hours;
-                            });
-                          }
-                        },
-                      );
-                    }),
-                  ),
-
-                  const SizedBox(height: 32),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-
-      // Fixed Bottom Action Bar
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 10,
-              offset: const Offset(0, -4),
-            ),
-          ],
-        ),
-        child: SafeArea(
-          child: Row(
-            children: [
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Total Estimated', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                  Text(
-                    '${totalAmountETB.toStringAsFixed(0)} ETB',
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.primary,
+                  // Status Badge
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: spot.statusColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Center(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.circle, size: 10, color: spot.statusColor),
+                          const SizedBox(width: 8),
+                          Text(
+                            spot.statusLabel,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: spot.statusColor,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
+
+                  const SizedBox(height: 20),
+
+                  // Amenities
+                  const Text(
+                    'Amenities',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: spot.amenities.map((a) => _amenityChip(a)).toList(),
+                  ),
+
+                  const SizedBox(height: 100), // Bottom padding for reserve button
                 ],
               ),
-              const SizedBox(width: 20),
-              Expanded(
-                child: SizedBox(
-                  height: 52,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.push(
+            ),
+          ),
+        ],
+      ),
+
+      // Sticky Reserve Button
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+          child: SizedBox(
+            height: 52,
+            child: ElevatedButton(
+              onPressed: spot.status == SpotStatus.full
+                  ? null
+                  : () => Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => BookingConfirmationScreen(
-                            spot: widget.spot,
-                            durationHours: _selectedHours,
-                          ),
+                          builder: (_) => BookingConfirmationScreen(spot: spot),
                         ),
-                      );
-                    },
-                    child: const Text('Reserve Spot'),
-                  ),
-                ),
+                      ),
+              child: Text(
+                spot.status == SpotStatus.full ? 'Spot Full — No Availability' : 'Reserve Now',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  static Widget _buildInfoTile(IconData icon, String title, String value, Color iconColor) {
+  Widget _infoTile(IconData icon, String value, String label) {
     return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceVariant.withValues(alpha: 0.4),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: iconColor, size: 22),
-          const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(title, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-              Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  static Widget _buildAmenityCard(IconData icon, String label) {
-    return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
       ),
       child: Row(
         children: [
-          Icon(icon, color: AppColors.textPrimary, size: 22),
-          const SizedBox(width: 10),
+          Icon(icon, size: 18, color: AppColors.primary),
+          const SizedBox(width: 8),
           Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                Text(label, style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+              ],
             ),
           ),
         ],
       ),
     );
+  }
+
+  Widget _amenityChip(String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.primaryContainer.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.primaryContainer),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(_amenityIcon(label), size: 14, color: AppColors.primary),
+          const SizedBox(width: 6),
+          Text(label, style: const TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+
+  IconData _amenityIcon(String label) {
+    switch (label.toLowerCase()) {
+      case 'ev charging': return Icons.ev_station;
+      case 'covered': return Icons.roofing;
+      case 'security': return Icons.security;
+      case 'cctv': return Icons.videocam;
+      case 'telebirr pay': return Icons.phone_android;
+      case 'gated': return Icons.lock;
+      case 'open air': return Icons.wb_sunny;
+      default: return Icons.check_circle_outline;
+    }
   }
 }
