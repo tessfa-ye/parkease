@@ -1,0 +1,163 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  USER
+  HOST
+  ATTENDANT
+  ADMIN
+}
+
+enum SpotType {
+  GOVERNMENT
+  COMMERCIAL
+  PRIVATE_HOST
+}
+
+enum SpotStatus {
+  AVAILABLE
+  FILLING_FAST
+  FULL
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum PaymentProvider {
+  CHAPA
+  TELEBIRR
+  CBE_BIRR
+  CASH
+}
+
+enum ListingStatus {
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  PAUSED
+}
+
+model User {
+  id          String         @id @default(uuid())
+  phone       String         @unique
+  name        String?
+  email       String?
+  role        Role           @default(USER)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  bookings    Booking[]
+  spots       ParkingSpot[]  @relation("HostSpots")
+  listings    HostListing[]
+
+  @@map("users")
+}
+
+model ParkingSpot {
+  id             String         @id @default(uuid())
+  title          String
+  address        String
+  city           String         @default("Addis Ababa")
+  countryCode    String         @default("ET")
+  latitude       Float
+  longitude      Float
+  pricePerHour   Float
+  totalSpots     Int
+  availableSpots Int
+  rating         Float          @default(5.0)
+  reviewCount    Int            @default(0)
+  spotType       SpotType       @default(COMMERCIAL)
+  status         SpotStatus     @default(AVAILABLE)
+  amenities      String[]       @default([])
+  imageUrl       String
+
+  // Host relation (optional for commercial/govt, required for private host)
+  hostId         String?
+  host           User?          @relation("HostSpots", fields: [hostId], references: [id])
+
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  bookings       Booking[]
+
+  @@map("parking_spots")
+}
+
+model Booking {
+  id             String         @id @default(uuid())
+  userId         String
+  user           User           @relation(fields: [userId], references: [id])
+  spotId         String
+  spot           ParkingSpot    @relation(fields: [spotId], references: [id])
+
+  vehiclePlate   String
+  startTime      DateTime
+  endTime        DateTime
+  durationHours  Float
+  totalAmount    Float
+  status         BookingStatus  @default(PENDING)
+  qrCodeData     String         @unique @default(uuid())
+
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  payment        Payment?
+
+  @@map("bookings")
+}
+
+model Payment {
+  id             String          @id @default(uuid())
+  bookingId      String          @unique
+  booking        Booking         @relation(fields: [bookingId], references: [id])
+
+  txRef          String          @unique
+  amount         Float
+  currency       String          @default("ETB")
+  provider       PaymentProvider @default(CHAPA)
+  status         PaymentStatus   @default(PENDING)
+  checkoutUrl    String?
+
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@map("payments")
+}
+
+model HostListing {
+  id             String         @id @default(uuid())
+  userId         String
+  user           User           @relation(fields: [userId], references: [id])
+
+  spaceType      String         // e.g. "Driveway", "Garage", "Open Lot"
+  capacity       Int            @default(1)
+  dimensions     String?        // e.g. "5m x 2.5m"
+  pricePerHour   Float
+  availableDays  String[]       @default(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"])
+  payoutMethod   String         // e.g. "Telebirr", "CBE Birr", "Bank Transfer"
+  payoutAccount  String
+  status         ListingStatus  @default(PENDING_APPROVAL)
+
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@map("host_listings")
+}
