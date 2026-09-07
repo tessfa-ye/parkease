@@ -73,7 +73,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return ListenableBuilder(
       listenable: LanguageController.instance,
       builder: (context, _) {
-        final List<Map<String, String>> _slides = [
+        final List<Map<String, String>> slides = [
           {
             'title': AppStrings.onboardingTitle1,
             'description': AppStrings.onboardingDesc1,
@@ -123,7 +123,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        AppStrings.appName + ' ',
+                        '${AppStrings.appName} ',
                         style: const TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.bold,
@@ -171,9 +171,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     _currentPage = index;
                   });
                 },
-                itemCount: _slides.length,
+                itemCount: slides.length,
                 itemBuilder: (context, index) {
-                  final slide = _slides[index];
+                  final slide = slides[index];
                   final isAsset = slide['imageUrl']!.startsWith('assets/');
                   return Center(
                     child: SingleChildScrollView(
@@ -330,7 +330,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: List.generate(
-                _slides.length,
+                slides.length,
                 (index) => AnimatedContainer(
                   duration: const Duration(milliseconds: 300),
                   margin: const EdgeInsets.symmetric(horizontal: 4),
@@ -354,7 +354,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 height: 50,
                 child: ElevatedButton(
                   onPressed: () {
-                    if (_currentPage < _slides.length - 1) {
+                    if (_currentPage < slides.length - 1) {
                       _pageController.nextPage(
                         duration: const Duration(milliseconds: 300),
                         curve: Curves.easeInOut,
@@ -369,10 +369,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(_currentPage == _slides.length - 1 ? AppStrings.getStarted : AppStrings.next),
+                      Text(_currentPage == slides.length - 1 ? AppStrings.getStarted : AppStrings.next),
                       const SizedBox(width: 8),
                       Icon(
-                        _currentPage == _slides.length - 1 ? Icons.rocket_launch : Icons.arrow_forward,
+                        _currentPage == slides.length - 1 ? Icons.rocket_launch : Icons.arrow_forward,
                         size: 18,
                       ),
                     ],

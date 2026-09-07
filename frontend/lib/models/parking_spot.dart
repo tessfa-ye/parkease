@@ -54,6 +54,72 @@ class ParkingSpot {
     this.hostRating,
   });
 
+  factory ParkingSpot.fromJson(Map<String, dynamic> json) {
+    SpotType type = SpotType.commercial;
+    final spotTypeStr = (json['spotType'] ?? '').toString().toUpperCase();
+    if (spotTypeStr.contains('GOVERNMENT')) {
+      type = SpotType.government;
+    } else if (spotTypeStr.contains('PRIVATE') || spotTypeStr.contains('HOST')) {
+      type = SpotType.privateHost;
+    }
+
+    SpotStatus stat = SpotStatus.available;
+    final statusStr = (json['status'] ?? '').toString().toUpperCase();
+    if (statusStr.contains('FULL')) {
+      stat = SpotStatus.full;
+    } else if (statusStr.contains('FAST') || statusStr.contains('FILLING')) {
+      stat = SpotStatus.fillingFast;
+    }
+
+    return ParkingSpot(
+      id: json['id']?.toString() ?? '',
+      title: json['title'] ?? 'Parking Spot',
+      address: json['address'] ?? '',
+      city: json['city'] ?? 'Addis Ababa',
+      countryCode: json['countryCode'] ?? 'ET',
+      latitude: (json['latitude'] as num?)?.toDouble() ?? 9.0227,
+      longitude: (json['longitude'] as num?)?.toDouble() ?? 38.7469,
+      pricePerHour: (json['pricePerHour'] as num?)?.toDouble() ?? 50.0,
+      distanceKm: (json['distanceKm'] as num?)?.toDouble() ?? 1.0,
+      totalSpots: (json['totalSpots'] as num?)?.toInt() ?? 50,
+      availableSpots: (json['availableSpots'] as num?)?.toInt() ?? 10,
+      rating: (json['rating'] as num?)?.toDouble() ?? 4.8,
+      reviewCount: (json['reviewCount'] as num?)?.toInt() ?? 25,
+      spotType: type,
+      status: stat,
+      amenities: (json['amenities'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      imageUrl: json['imageUrl'] ?? 'https://images.unsplash.com/photo-1506521781263-d8422e82f27a?w=600',
+      hostName: json['hostName'] ?? json['host']?['name'],
+      hostPhotoUrl: json['hostPhotoUrl'],
+      hostRating: (json['hostRating'] as num?)?.toDouble(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'address': address,
+      'city': city,
+      'countryCode': countryCode,
+      'latitude': latitude,
+      'longitude': longitude,
+      'pricePerHour': pricePerHour,
+      'distanceKm': distanceKm,
+      'totalSpots': totalSpots,
+      'availableSpots': availableSpots,
+      'rating': rating,
+      'reviewCount': reviewCount,
+      'spotType': spotTypeLabel,
+      'status': statusLabel,
+      'amenities': amenities,
+      'imageUrl': imageUrl,
+      'hostName': hostName,
+      'hostPhotoUrl': hostPhotoUrl,
+      'hostRating': hostRating,
+    };
+  }
+
   String get currencySymbol => LocaleUtils.currencyDisplaySymbol(countryCode);
   String get distanceUnit => LocaleUtils.distanceUnit(countryCode);
   String get formattedPrice => '${LocaleUtils.currencyDisplaySymbol(countryCode)} ${pricePerHour.toInt()}/hr';

@@ -5,6 +5,7 @@ import 'package:geolocator/geolocator.dart';
 import '../models/parking_spot.dart';
 import '../theme/app_theme.dart';
 import '../l10n/app_strings.dart';
+import '../services/api_service.dart';
 import 'spot_details_screen.dart';
 
 class HomeMapScreen extends StatefulWidget {
@@ -17,11 +18,14 @@ class HomeMapScreen extends StatefulWidget {
 
 class _HomeMapScreenState extends State<HomeMapScreen> {
   final Completer<GoogleMapController> _mapController = Completer();
-  final List<ParkingSpot> _spots = ParkingSpot.sampleSpots;
+  List<ParkingSpot> _spots = [];
   final Set<Marker> _markers = {};
   ParkingSpot? _selectedSpot;
   String _activeFilterKey = 'all';
+  String _searchQuery = '';
   bool _isLocating = false;
+  bool _isLoadingSpots = true;
+  Position? _currentPosition;
 
   // Default: Addis Ababa center (used until GPS loads)
   static const CameraPosition _defaultPosition = CameraPosition(
@@ -41,8 +45,26 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   @override
   void initState() {
     super.initState();
-    _buildMarkers();
+    _fetchSpots();
     _goToCurrentLocation();
+  }
+
+  Future<void> _fetchSpots() async {
+    setState(() => _isLoadingSpots = true);
+    final spots = await ApiService.getSpots(
+      lat: _currentPosition?.latitude ?? 9.0227,
+      lng: _currentPosition?.longitude ?? 38.7469,
+      spotType: _activeFilterKey,
+      search: _searchQuery,
+    );
+
+    if (mounted) {
+      setState(() {
+        _spots = spots;
+        _isLoadingSpots = false;
+        _buildMarkers();
+      });
+    }
   }
 
   Future<void> _goToCurrentLocation() async {
@@ -58,6 +80,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
       final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
       );
+      _currentPosition = position;
       final controller = await _mapController.future;
       await controller.animateCamera(
         CameraUpdate.newLatLngZoom(
@@ -65,6 +88,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
           15.0,
         ),
       );
+      _fetchSpots();
     } catch (_) {
       // Keep default Addis Ababa view if location fails
     } finally {
@@ -74,8 +98,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
 
   void _buildMarkers() {
     _markers.clear();
-    final filtered = _filteredSpots;
-    for (final spot in filtered) {
+    for (final spot in _spots) {
       _markers.add(
         Marker(
           markerId: MarkerId(spot.id),
@@ -98,25 +121,6 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     setState(() {});
   }
 
-  List<ParkingSpot> get _filteredSpots {
-    if (_activeFilterKey == 'all') return _spots;
-    if (_activeFilterKey == 'commercial') {
-      return _spots.where((s) => s.spotType == SpotType.commercial).toList();
-    }
-    if (_activeFilterKey == 'government') {
-      return _spots.where((s) => s.spotType == SpotType.government).toList();
-    }
-    if (_activeFilterKey == 'private') {
-      return _spots.where((s) => s.spotType == SpotType.privateHost).toList();
-    }
-    if (_activeFilterKey == 'covered') {
-      return _spots.where((s) => s.amenities.contains('Covered')).toList();
-    }
-    if (_activeFilterKey == 'ev') {
-      return _spots.where((s) => s.amenities.contains('EV Charging')).toList();
-    }
-    return _spots;
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -159,6 +163,10 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                     ],
                   ),
                   child: TextField(
+                    onChanged: (val) {
+                      _searchQuery = val;
+                      _fetchSpots();
+                    },
                     decoration: InputDecoration(
                       hintText: AppStrings.searchParking,
                       hintStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
@@ -190,7 +198,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                         child: GestureDetector(
                           onTap: () {
                             setState(() => _activeFilterKey = opt['key']!);
-                            _buildMarkers();
+                            _fetchSpots();
                           },
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 200),
@@ -279,13 +287,21 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                         Text(
                           _selectedSpot != null
                               ? AppStrings.availability
-                              : '${AppStrings.nearbyParking} (${_filteredSpots.length})',
+                              : '${AppStrings.nearbyParking} (${_spots.length})',
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                             color: AppColors.textPrimary,
                           ),
                         ),
+                        if (_isLoadingSpots) ...[
+                          const SizedBox(width: 8),
+                          const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ],
                         const Spacer(),
                         if (_selectedSpot != null)
                           GestureDetector(
@@ -300,13 +316,20 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                     height: _selectedSpot != null ? 200 : 180,
                     child: _selectedSpot != null
                         ? _buildSpotCard(_selectedSpot!, large: true)
-                        : ListView.separated(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                            scrollDirection: Axis.horizontal,
-                            itemCount: _filteredSpots.length,
-                            separatorBuilder: (_, __) => const SizedBox(width: 12),
-                            itemBuilder: (_, i) => _buildSpotCard(_filteredSpots[i]),
-                          ),
+                        : _spots.isEmpty
+                            ? Center(
+                                child: Text(
+                                  'No parking spots found',
+                                  style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                                ),
+                              )
+                            : ListView.separated(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                                scrollDirection: Axis.horizontal,
+                                itemCount: _spots.length,
+                                separatorBuilder: (_, __) => const SizedBox(width: 12),
+                                itemBuilder: (_, i) => _buildSpotCard(_spots[i]),
+                              ),
                   ),
                   const SizedBox(height: 16),
                 ],

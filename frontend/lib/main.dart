@@ -4,7 +4,11 @@ import 'theme/app_theme.dart';
 import 'screens/onboarding_screen.dart';
 import 'l10n/app_strings.dart';
 
-void main() {
+import '../services/auth_service.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await AuthService.instance.init();
   runApp(const ParkEaseApp());
 }
 

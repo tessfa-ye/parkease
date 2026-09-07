@@ -48,6 +48,10 @@ dependencies:
   # Permissions
   permission_handler: ^11.3.1
 
+  # Networking & Storage
+  http: ^1.2.2
+  shared_preferences: ^2.3.3
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
