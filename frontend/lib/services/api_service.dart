@@ -95,4 +95,53 @@ class ApiService {
     } catch (_) {}
     return null;
   }
+
+  /// Initializes a Chapa checkout session
+  static Future<Map<String, dynamic>?> initializePayment({
+    required String bookingId,
+    required double amount,
+    String? phone,
+    String? email,
+    String? name,
+  }) async {
+    try {
+      final response = await http
+          .post(
+            Uri.parse(ApiConfig.paymentsInitialize),
+            headers: _getHeaders(),
+            body: jsonEncode({
+              'bookingId': bookingId,
+              'amount': amount,
+              'phone': phone,
+              'email': email ?? 'driver@parkease.et',
+              'name': name ?? 'ParkEase Driver',
+            }),
+          )
+          .timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['data'];
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Verifies a payment with the backend
+  static Future<Map<String, dynamic>?> verifyPayment(String txRef) async {
+    try {
+      final response = await http
+          .get(
+            Uri.parse('${ApiConfig.baseUrl}/payments/verify/$txRef'),
+            headers: _getHeaders(),
+          )
+          .timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['data'];
+      }
+    } catch (_) {}
+    return null;
+  }
 }

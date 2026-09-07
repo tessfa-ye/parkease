@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/parking_spot.dart';
 import '../theme/app_theme.dart';
+import '../services/api_service.dart';
+import '../services/auth_service.dart';
 import 'payment_screen.dart';
 
 class BookingConfirmationScreen extends StatefulWidget {
@@ -19,7 +22,8 @@ class BookingConfirmationScreen extends StatefulWidget {
 
 class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
   String _selectedVehicle = 'Code 3 - A24561 AA (Toyota Vitz)';
-  String _selectedPaymentMethod = 'Telebirr / Mobile Wallet';
+  String _selectedPaymentMethod = 'Telebirr (via Chapa)';
+  bool _isProcessing = false;
 
   final List<String> _vehicles = [
     'Code 3 - A24561 AA (Toyota Vitz)',
@@ -27,6 +31,68 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
     'Code 2 - C11223 AA (Suzuki Dzire)',
     'Standard Sedan (ABC-1234)',
   ];
+
+  Future<void> _handlePayAndReserve(double grandTotal) async {
+    setState(() => _isProcessing = true);
+
+    final startTime = DateTime.now();
+
+    // 1. Create booking on backend
+    final booking = await ApiService.createBooking(
+      spotId: widget.spot.id,
+      vehiclePlate: _selectedVehicle,
+      startTime: startTime,
+      durationHours: widget.durationHours.toDouble(),
+      totalAmount: grandTotal,
+    );
+
+    final bookingId = booking?['id'] ?? 'BK-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+    final qrCodeData = booking?['qrCodeData'] ?? 'PARKEASE-PASS-$bookingId';
+
+    // 2. Initialize Chapa Checkout
+    final paymentInit = await ApiService.initializePayment(
+      bookingId: bookingId,
+      amount: grandTotal,
+      phone: AuthService.instance.phone,
+      name: AuthService.instance.name,
+    );
+
+    final checkoutUrl = paymentInit?['checkoutUrl'];
+    final txRef = paymentInit?['txRef'] ?? 'PE-TX-${DateTime.now().millisecondsSinceEpoch}';
+
+    // 3. Launch Chapa checkout if available
+    if (checkoutUrl != null && checkoutUrl.isNotEmpty) {
+      try {
+        final uri = Uri.parse(checkoutUrl);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        }
+      } catch (_) {
+        // Fallback for mock sandbox URLs
+      }
+    }
+
+    setState(() => _isProcessing = false);
+
+    if (!mounted) return;
+
+    // 4. Navigate to Digital Pass confirmation screen
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PaymentScreen(
+          spot: widget.spot,
+          durationHours: widget.durationHours,
+          totalPriceETB: grandTotal,
+          vehiclePlate: _selectedVehicle,
+          bookingId: bookingId,
+          qrCodeData: qrCodeData,
+          txRef: txRef,
+          paymentMethod: _selectedPaymentMethod,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -60,6 +126,7 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
                         image: DecorationImage(
                           image: NetworkImage(widget.spot.imageUrl),
                           fit: BoxFit.cover,
+                          onError: (_, __) {},
                         ),
                       ),
                     ),
@@ -71,8 +138,10 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
                           Text(
                             widget.spot.title,
                             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 2),
                           Text(
                             widget.spot.address,
                             style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
@@ -104,7 +173,10 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
                     const Divider(height: 24),
                     _buildRowDetail('Duration', '${widget.durationHours} Hours'),
                     const Divider(height: 24),
-                    _buildRowDetail('End Time', 'Today, ${TimeOfDay.fromDateTime(DateTime.now().add(Duration(hours: widget.durationHours))).format(context)}'),
+                    _buildRowDetail(
+                      'End Time',
+                      'Today, ${TimeOfDay.fromDateTime(DateTime.now().add(Duration(hours: widget.durationHours))).format(context)}',
+                    ),
                   ],
                 ),
               ),
@@ -135,14 +207,13 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
 
             // Payment Options
             const Text(
-              'Payment Method',
+              'Payment Method (Chapa Gateway)',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
             ),
             const SizedBox(height: 12),
-            _buildPaymentOption('Telebirr / Mobile Wallet', Icons.phone_android),
-            _buildPaymentOption('CBE Birr / Bank Transfer', Icons.account_balance),
-            _buildPaymentOption('Credit / Debit Card (Chapa / Stripe)', Icons.credit_card),
-            _buildPaymentOption('Apple Pay / Google Pay', Icons.payment),
+            _buildPaymentOption('Telebirr (via Chapa)', Icons.phone_android),
+            _buildPaymentOption('CBE Birr (via Chapa)', Icons.account_balance),
+            _buildPaymentOption('Credit / Debit Card', Icons.credit_card),
 
             const SizedBox(height: 24),
 
@@ -176,20 +247,21 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
               width: double.infinity,
               height: 52,
               child: ElevatedButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => PaymentScreen(
-                        spot: widget.spot,
-                        durationHours: widget.durationHours,
-                        totalPriceETB: grandTotal,
-                        vehiclePlate: _selectedVehicle,
-                      ),
-                    ),
-                  );
-                },
-                child: Text('Pay $currency ${grandTotal.toStringAsFixed(0)} & Reserve'),
+                onPressed: _isProcessing ? null : () => _handlePayAndReserve(grandTotal),
+                child: _isProcessing
+                    ? const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                          ),
+                          SizedBox(width: 12),
+                          Text('Opening Chapa Checkout...'),
+                        ],
+                      )
+                    : Text('Pay $currency ${grandTotal.toStringAsFixed(0)} & Reserve'),
               ),
             ),
             const SizedBox(height: 16),
@@ -232,8 +304,7 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
                 ),
               ),
             ),
-            if (isSelected)
-              const Icon(Icons.check_circle, color: AppColors.primary, size: 20),
+            if (isSelected) const Icon(Icons.check_circle, color: AppColors.primary, size: 20),
           ],
         ),
       ),

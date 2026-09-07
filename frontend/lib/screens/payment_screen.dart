@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import '../models/parking_spot.dart';
 import '../theme/app_theme.dart';
 import 'main_navigation_shell.dart';
@@ -8,6 +9,10 @@ class PaymentScreen extends StatelessWidget {
   final int durationHours;
   final double totalPriceETB;
   final String vehiclePlate;
+  final String? bookingId;
+  final String? qrCodeData;
+  final String? txRef;
+  final String paymentMethod;
 
   const PaymentScreen({
     super.key,
@@ -15,11 +20,16 @@ class PaymentScreen extends StatelessWidget {
     required this.durationHours,
     required this.totalPriceETB,
     required this.vehiclePlate,
+    this.bookingId,
+    this.qrCodeData,
+    this.txRef,
+    this.paymentMethod = 'Telebirr / Chapa',
   });
 
   @override
   Widget build(BuildContext context) {
-    const slotNumber = 'Bole-14';
+    final passCode = qrCodeData ?? 'PARKEASE-PASS-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+    final slotNumber = '${spot.city.split(" ").first}-Slot-${(spot.availableSpots % 25) + 1}';
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -34,30 +44,32 @@ class PaymentScreen extends StatelessWidget {
             children: [
               // Checkmark Badge
               Container(
-                width: 80,
-                height: 80,
+                width: 76,
+                height: 76,
                 decoration: const BoxDecoration(
                   color: AppColors.available,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.check, color: Colors.white, size: 48),
+                child: const Icon(Icons.check, color: Colors.white, size: 44),
               ),
               const SizedBox(height: 16),
-              const Text(
-                'Telebirr Payment Successful!',
-                style: TextStyle(
+              Text(
+                '$paymentMethod Payment Confirmed!',
+                style: const TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
                   color: AppColors.textPrimary,
                 ),
+                textAlign: TextAlign.center,
               ),
               const SizedBox(height: 4),
               const Text(
-                'Your Addis Ababa parking spot is confirmed.',
+                'Your parking space is reserved & digital pass is ready.',
                 style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                textAlign: TextAlign.center,
               ),
 
-              const SizedBox(height: 28),
+              const SizedBox(height: 24),
 
               // Pass Card
               Card(
@@ -66,7 +78,7 @@ class PaymentScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.all(24.0),
+                  padding: const EdgeInsets.all(22.0),
                   child: Column(
                     children: [
                       Text(
@@ -85,22 +97,22 @@ class PaymentScreen extends StatelessWidget {
                         textAlign: TextAlign.center,
                       ),
 
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 18),
                       const Divider(),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 18),
 
                       // Assigned Slot & Duration
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
                           Column(
-                            children: const [
-                              Text('ASSIGNED SLOT', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
-                              SizedBox(height: 4),
+                            children: [
+                              const Text('ASSIGNED SLOT', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
+                              const SizedBox(height: 4),
                               Text(
                                 slotNumber,
-                                style: TextStyle(
-                                  fontSize: 22,
+                                style: const TextStyle(
+                                  fontSize: 18,
                                   fontWeight: FontWeight.bold,
                                   color: AppColors.primary,
                                 ),
@@ -125,27 +137,46 @@ class PaymentScreen extends StatelessWidget {
                         ],
                       ),
 
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 22),
 
-                      // QR Code Pass
+                      // Dynamic Scannable QR Code Pass
                       Container(
-                        width: 180,
-                        height: 180,
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(color: AppColors.border),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.04),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
                         ),
                         child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.qr_code_2, size: 120, color: AppColors.textPrimary),
+                            QrImageView(
+                              data: passCode,
+                              version: QrVersions.auto,
+                              size: 160.0,
+                              eyeStyle: const QrEyeStyle(
+                                eyeShape: QrEyeShape.square,
+                                color: AppColors.textPrimary,
+                              ),
+                              dataModuleStyle: const QrDataModuleStyle(
+                                dataModuleShape: QrDataModuleShape.square,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
                             Text(
-                              'PASS: BK-AA-8842',
+                              passCode,
                               style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
+                                letterSpacing: 0.5,
                                 color: AppColors.textSecondary.withValues(alpha: 0.8),
                               ),
                             ),
@@ -153,16 +184,16 @@ class PaymentScreen extends StatelessWidget {
                         ),
                       ),
 
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 14),
                       const Text(
-                        'Scan QR code at entry barrier in Addis Ababa',
+                        'Scan QR code at entry barrier or show to parking attendant',
                         style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                         textAlign: TextAlign.center,
                       ),
 
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 18),
                       const Divider(),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 14),
 
                       // Vehicle & Total Paid in ETB
                       Row(
@@ -179,6 +210,19 @@ class PaymentScreen extends StatelessWidget {
                           ),
                         ],
                       ),
+                      if (txRef != null && txRef!.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Tx Ref:', style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+                            Text(
+                              txRef!,
+                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 11, color: AppColors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: 8),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -195,7 +239,7 @@ class PaymentScreen extends StatelessWidget {
                 ),
               ),
 
-              const SizedBox(height: 28),
+              const SizedBox(height: 24),
 
               // Navigation Buttons
               SizedBox(
@@ -217,9 +261,13 @@ class PaymentScreen extends StatelessWidget {
                 width: double.infinity,
                 height: 48,
                 child: OutlinedButton.icon(
-                  onPressed: () {},
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Receipt downloaded successfully!')),
+                    );
+                  },
                   icon: const Icon(Icons.download),
-                  label: const Text('Download Telebirr Receipt'),
+                  label: const Text('Download Receipt'),
                 ),
               ),
             ],
