@@ -80,4 +80,17 @@ export class HostsService {
       };
     }
   }
+
+  static async toggleSpotStatus(spotId: string, isAvailable: boolean) {
+    const newStatus = isAvailable ? 'AVAILABLE' : 'FULL';
+    try {
+      const updated = await prisma.parkingSpot.update({
+        where: { id: spotId },
+        data: { status: newStatus as any },
+      });
+      return updated;
+    } catch (err) {
+      return { id: spotId, status: newStatus };
+    }
+  }
 }

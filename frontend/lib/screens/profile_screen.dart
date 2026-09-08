@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../l10n/app_strings.dart';
 import 'login_screen.dart';
-import 'host_registration_screen.dart';
+import 'host_dashboard_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -143,11 +143,11 @@ class ProfileScreen extends StatelessWidget {
 
             const SizedBox(height: 28),
 
-            // Become a Host Banner
+            // Host Dashboard & Earnings Banner
             GestureDetector(
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const HostRegistrationScreen()),
+                MaterialPageRoute(builder: (_) => const HostDashboardScreen()),
               ),
               child: Container(
                 width: double.infinity,
@@ -159,6 +159,13 @@ class ProfileScreen extends StatelessWidget {
                     end: Alignment.bottomRight,
                   ),
                   borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFEA580C).withValues(alpha: 0.25),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
                 child: Row(
                   children: [
@@ -167,15 +174,15 @@ class ProfileScreen extends StatelessWidget {
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
+                        children: const [
                           Text(
-                            AppStrings.becomeHost,
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                            'Host Dashboard & Earnings',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                           ),
-                          const SizedBox(height: 3),
+                          SizedBox(height: 3),
                           Text(
-                            AppStrings.becomeHostDesc,
-                            style: const TextStyle(fontSize: 12, color: Colors.white70),
+                            'Manage your space availability & withdraw earnings',
+                            style: TextStyle(fontSize: 12, color: Colors.white70),
                           ),
                         ],
                       ),

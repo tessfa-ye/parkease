@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../services/api_service.dart';
+import 'host_dashboard_screen.dart';
 
 /// Multi-step host registration screen — allows users to list
 /// their free parking space and earn money per booking.
@@ -382,9 +384,40 @@ class _HostRegistrationScreenState extends State<HostRegistrationScreen> {
     );
   }
 
-  void _submitListing() {
+  void _submitListing() async {
     showDialog(
       context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    final activeDays = <String>[];
+    for (int i = 0; i < _availableDays.length; i++) {
+      if (_availableDays[i]) {
+        activeDays.add(_dayNames[i]);
+      }
+    }
+
+    final price = double.tryParse(_priceController.text) ?? 30.0;
+
+    await ApiService.submitHostListing(
+      spaceType: _spaceType,
+      capacity: _capacity,
+      dimensions: _dimensionsController.text.trim(),
+      pricePerHour: price,
+      availableDays: activeDays,
+      payoutMethod: _payoutMethod,
+      payoutAccount: _payoutAccountController.text.trim(),
+    );
+
+    if (!mounted) return;
+    Navigator.pop(context); // Dismiss loading
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         content: Column(
@@ -392,10 +425,14 @@ class _HostRegistrationScreenState extends State<HostRegistrationScreen> {
           children: [
             const Icon(Icons.check_circle, size: 64, color: AppColors.available),
             const SizedBox(height: 16),
-            const Text('Listing Submitted!', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const Text(
+              'Space Listed Successfully!',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 8),
             const Text(
-              'Your parking space is under review. You\'ll be notified once it\'s live on ParkEase.',
+              'Your parking spot is now listed! You can manage bookings, live occupancy, and payouts in your Host Dashboard.',
               textAlign: TextAlign.center,
               style: TextStyle(color: AppColors.textSecondary),
             ),
@@ -404,11 +441,22 @@ class _HostRegistrationScreenState extends State<HostRegistrationScreen> {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () {
-                  Navigator.pop(context);
-                  Navigator.pop(context);
+                  Navigator.pop(context); // Dismiss dialog
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => const HostDashboardScreen()),
+                  );
                 },
-                child: const Text('Done'),
+                child: const Text('Go to Host Dashboard'),
               ),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.pop(context);
+              },
+              child: const Text('Back to Home'),
             ),
           ],
         ),

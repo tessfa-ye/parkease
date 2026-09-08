@@ -47,4 +47,20 @@ export class HostsController {
       next(error);
     }
   }
+
+  static async toggleSpotStatus(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      const { isAvailable } = req.body;
+      const updated = await HostsService.toggleSpotStatus(id, !!isAvailable);
+
+      res.status(200).json({
+        success: true,
+        message: `Spot status updated to ${isAvailable ? 'AVAILABLE' : 'FULL'}`,
+        data: updated,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
