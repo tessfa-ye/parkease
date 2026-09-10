@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/parking_spot.dart';
+import '../models/booking.dart';
 import '../theme/app_theme.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
+import '../services/booking_store.dart';
+import '../services/vehicle_store.dart';
+import '../services/host_space_store.dart';
 import 'payment_screen.dart';
 
 class BookingConfirmationScreen extends StatefulWidget {
@@ -21,16 +25,41 @@ class BookingConfirmationScreen extends StatefulWidget {
 }
 
 class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
-  String _selectedVehicle = 'Code 3 - A24561 AA (Toyota Vitz)';
+  late int _durationHours;
+  late String _selectedVehicle;
   String _selectedPaymentMethod = 'Telebirr (via Chapa)';
   bool _isProcessing = false;
 
-  final List<String> _vehicles = [
-    'Code 3 - A24561 AA (Toyota Vitz)',
-    'Code 3 - B98765 AA (Hyundai Tucson)',
-    'Code 2 - C11223 AA (Suzuki Dzire)',
-    'Standard Sedan (ABC-1234)',
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _durationHours = widget.durationHours > 0 ? widget.durationHours : 2;
+
+    final availableVehicles = VehicleStore.instance.vehicleDisplayNames;
+    if (availableVehicles.isNotEmpty) {
+      _selectedVehicle = availableVehicles.first;
+    } else {
+      _selectedVehicle = 'Code 3 - A24561 AA (Toyota Vitz)';
+    }
+
+    VehicleStore.instance.addListener(_onVehicleStoreChanged);
+  }
+
+  @override
+  void dispose() {
+    VehicleStore.instance.removeListener(_onVehicleStoreChanged);
+    super.dispose();
+  }
+
+  void _onVehicleStoreChanged() {
+    if (!mounted) return;
+    final available = VehicleStore.instance.vehicleDisplayNames;
+    if (available.isNotEmpty && !available.contains(_selectedVehicle)) {
+      setState(() {
+        _selectedVehicle = available.first;
+      });
+    }
+  }
 
   Future<void> _handlePayAndReserve(double grandTotal) async {
     setState(() => _isProcessing = true);
@@ -42,14 +71,34 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
       spotId: widget.spot.id,
       vehiclePlate: _selectedVehicle,
       startTime: startTime,
-      durationHours: widget.durationHours.toDouble(),
+      durationHours: _durationHours.toDouble(),
       totalAmount: grandTotal,
     );
 
     final bookingId = booking?['id'] ?? 'BK-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
     final qrCodeData = booking?['qrCodeData'] ?? 'PARKEASE-PASS-$bookingId';
 
-    // 2. Initialize Chapa Checkout
+    final slotNumber = '${widget.spot.city.split(" ").first}-Slot-${(widget.spot.availableSpots % 25) + 1}';
+
+    // 2. Persist booking to live client store so it instantly reflects in TripHistoryScreen
+    final newBooking = Booking(
+      id: bookingId,
+      spot: widget.spot,
+      startTime: startTime,
+      endTime: startTime.add(Duration(hours: _durationHours)),
+      durationHours: _durationHours,
+      totalPriceETB: grandTotal,
+      slotNumber: slotNumber,
+      vehiclePlate: _selectedVehicle,
+      status: BookingStatus.active,
+      qrCodeData: qrCodeData,
+    );
+    BookingStore.instance.addBooking(newBooking);
+
+    // 3. Update host space occupancy if it is a host space
+    HostSpaceStore.instance.recordBooking(widget.spot.id);
+
+    // 4. Initialize Chapa Checkout
     final paymentInit = await ApiService.initializePayment(
       bookingId: bookingId,
       amount: grandTotal,
@@ -60,7 +109,7 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
     final checkoutUrl = paymentInit?['checkoutUrl'];
     final txRef = paymentInit?['txRef'] ?? 'PE-TX-${DateTime.now().millisecondsSinceEpoch}';
 
-    // 3. Launch Chapa checkout if available
+    // 5. Launch Chapa checkout if available
     if (checkoutUrl != null && checkoutUrl.isNotEmpty) {
       try {
         final uri = Uri.parse(checkoutUrl);
@@ -76,13 +125,13 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
 
     if (!mounted) return;
 
-    // 4. Navigate to Digital Pass confirmation screen
+    // 6. Navigate to Digital Pass confirmation screen
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
         builder: (_) => PaymentScreen(
           spot: widget.spot,
-          durationHours: widget.durationHours,
+          durationHours: _durationHours,
           totalPriceETB: grandTotal,
           vehiclePlate: _selectedVehicle,
           bookingId: bookingId,
@@ -96,11 +145,14 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final subtotal = widget.spot.pricePerHour * widget.durationHours;
+    final subtotal = widget.spot.pricePerHour * _durationHours;
     final serviceFee = widget.spot.countryCode == 'ET' ? 10.00 : 1.50;
     final tax = widget.spot.countryCode == 'ET' ? 5.00 : 0.75;
     final grandTotal = subtotal + serviceFee + tax;
     final currency = widget.spot.currencySymbol;
+    final vehicles = VehicleStore.instance.vehicleDisplayNames.isNotEmpty
+        ? VehicleStore.instance.vehicleDisplayNames
+        : ['Code 3 - A24561 AA (Toyota Vitz)'];
 
     return Scaffold(
       appBar: AppBar(
@@ -170,12 +222,54 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
                 child: Column(
                   children: [
                     _buildRowDetail('Start Time', 'Today, ${TimeOfDay.now().format(context)}'),
-                    const Divider(height: 24),
-                    _buildRowDetail('Duration', '${widget.durationHours} Hours'),
-                    const Divider(height: 24),
+                    const Divider(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Duration',
+                          style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                        ),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryContainer.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.remove, size: 18, color: AppColors.primary),
+                                onPressed: _durationHours > 1
+                                    ? () => setState(() => _durationHours--)
+                                    : null,
+                                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                padding: EdgeInsets.zero,
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                                child: Text(
+                                  '$_durationHours hrs',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.textPrimary),
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.add, size: 18, color: AppColors.primary),
+                                onPressed: _durationHours < 24
+                                    ? () => setState(() => _durationHours++)
+                                    : null,
+                                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                padding: EdgeInsets.zero,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 20),
                     _buildRowDetail(
                       'End Time',
-                      'Today, ${TimeOfDay.fromDateTime(DateTime.now().add(Duration(hours: widget.durationHours))).format(context)}',
+                      'Today, ${TimeOfDay.fromDateTime(DateTime.now().add(Duration(hours: _durationHours))).format(context)}',
                     ),
                   ],
                 ),
@@ -191,11 +285,11 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              initialValue: _selectedVehicle,
+              initialValue: vehicles.contains(_selectedVehicle) ? _selectedVehicle : vehicles.first,
               decoration: const InputDecoration(
                 prefixIcon: Icon(Icons.directions_car_outlined),
               ),
-              items: _vehicles.map((v) {
+              items: vehicles.map((v) {
                 return DropdownMenuItem(value: v, child: Text(v));
               }).toList(),
               onChanged: (val) {
@@ -228,7 +322,7 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   children: [
-                    _buildRowDetail('Parking Fee (${widget.durationHours} hrs)', '$currency ${subtotal.toStringAsFixed(0)}'),
+                    _buildRowDetail('Parking Fee ($_durationHours hrs)', '$currency ${subtotal.toStringAsFixed(0)}'),
                     const SizedBox(height: 8),
                     _buildRowDetail('Service Fee', '$currency ${serviceFee.toStringAsFixed(0)}'),
                     const SizedBox(height: 8),

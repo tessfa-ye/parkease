@@ -5,10 +5,16 @@ import 'screens/onboarding_screen.dart';
 import 'l10n/app_strings.dart';
 
 import '../services/auth_service.dart';
+import '../services/booking_store.dart';
+import '../services/vehicle_store.dart';
+import '../services/host_space_store.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AuthService.instance.init();
+  await BookingStore.instance.init();
+  await VehicleStore.instance.init();
+  await HostSpaceStore.instance.init();
   runApp(const ParkEaseApp());
 }
 

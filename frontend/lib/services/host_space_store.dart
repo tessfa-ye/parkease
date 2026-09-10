@@ -1,34 +1,67 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/parking_spot.dart';
 import 'auth_service.dart';
 
-/// In-memory store for host-listed parking spaces.
-/// Persists spaces within the current app session and exposes them
-/// to both the Host Dashboard and the Explore Spots map.
+/// Persistent and reactive store for host-listed parking spaces.
+/// Persists spaces to local device storage across Hot Restarts and app restarts,
+/// and exposes them live to both the Host Dashboard and the Explore Spots map.
 class HostSpaceStore extends ChangeNotifier {
   HostSpaceStore._();
   static final HostSpaceStore instance = HostSpaceStore._();
 
+  static const String _keySpaces = 'user_host_spaces_cache_v2';
+
+  static const Map<String, dynamic> _defaultSpace = {
+    'id': 'host_spot_1',
+    'title': 'Home Driveway & Garage',
+    'address': 'Bole Sub-City, Wereda 03, Addis Ababa',
+    'city': 'Addis Ababa',
+    'spaceType': 'Driveway',
+    'capacity': 2,
+    'pricePerHour': 30.0,
+    'isAvailable': true,
+    'occupied': 1,
+    'latitude': 9.0150,
+    'longitude': 38.7640,
+    'imageUrl': 'https://images.unsplash.com/photo-1572120360610-d971b9d7767c?w=600',
+    'hostName': 'Abebe K.',
+  };
+
   final List<Map<String, dynamic>> _spaces = [
-    // Default sample space matching the initial host driveway
-    {
-      'id': 'host_spot_1',
-      'title': 'Home Driveway & Garage',
-      'address': 'Bole Sub-City, Wereda 03, Addis Ababa',
-      'city': 'Addis Ababa',
-      'spaceType': 'Driveway',
-      'capacity': 2,
-      'pricePerHour': 30.0,
-      'isAvailable': true,
-      'occupied': 1,
-      'latitude': 9.0150,
-      'longitude': 38.7640,
-    },
+    Map<String, dynamic>.from(_defaultSpace),
   ];
+
+  bool _isInitialized = false;
 
   List<Map<String, dynamic>> get spaces => List.unmodifiable(_spaces);
 
-  /// Add a newly submitted space to the store and notify all screens (Dashboard & Explore Map)
+  /// Load and restore stored spaces from SharedPreferences
+  Future<void> init() async {
+    if (_isInitialized) return;
+    _isInitialized = true;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cachedJson = prefs.getString(_keySpaces);
+      if (cachedJson != null && cachedJson.isNotEmpty) {
+        final List<dynamic> decoded = jsonDecode(cachedJson);
+        _spaces.clear();
+        for (final item in decoded) {
+          if (item is Map<String, dynamic>) {
+            _spaces.add(Map<String, dynamic>.from(item));
+          }
+        }
+        if (_spaces.isEmpty) {
+          _spaces.add(Map<String, dynamic>.from(_defaultSpace));
+        }
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  /// Add a newly submitted space to the store and persist immediately
   void addSpace({
     required String spaceType,
     required int capacity,
@@ -66,7 +99,7 @@ class HostSpaceStore extends ChangeNotifier {
         imageUrl = 'https://images.unsplash.com/photo-1572120360610-d971b9d7767c?w=600';
     }
 
-    _spaces.add({
+    _spaces.insert(0, {
       'id': id,
       'title': '$spaceType Parking Space',
       'address': address ?? 'Bole, Addis Ababa',
@@ -86,6 +119,17 @@ class HostSpaceStore extends ChangeNotifier {
       'hostName': AuthService.instance.name ?? 'Abebe K.',
     });
 
+    _saveToDisk();
+    notifyListeners();
+  }
+
+  /// Remove a space by ID
+  void removeSpace(String id) {
+    _spaces.removeWhere((s) => s['id'] == id);
+    if (_spaces.isEmpty) {
+      _spaces.add(Map<String, dynamic>.from(_defaultSpace));
+    }
+    _saveToDisk();
     notifyListeners();
   }
 
@@ -151,12 +195,15 @@ class HostSpaceStore extends ChangeNotifier {
             'occupied': spot['occupied'] ?? 0,
             'latitude': (spot['latitude'] as num?)?.toDouble() ?? 9.0150,
             'longitude': (spot['longitude'] as num?)?.toDouble() ?? 38.7640,
+            'imageUrl': spot['imageUrl'] ?? 'https://images.unsplash.com/photo-1572120360610-d971b9d7767c?w=600',
+            'hostName': spot['hostName'] ?? AuthService.instance.name ?? 'Abebe K.',
           });
           added = true;
         }
       }
     }
     if (added) {
+      _saveToDisk();
       notifyListeners();
     }
   }
@@ -165,7 +212,42 @@ class HostSpaceStore extends ChangeNotifier {
   void toggleAvailability(int index, bool isAvailable) {
     if (index >= 0 && index < _spaces.length) {
       _spaces[index]['isAvailable'] = isAvailable;
+      _saveToDisk();
       notifyListeners();
     }
+  }
+
+  /// Record an incoming booking on a host space, incrementing occupied count
+  void recordBooking(String spotId) {
+    final index = _spaces.indexWhere((s) => s['id'] == spotId);
+    if (index != -1) {
+      final cap = (_spaces[index]['capacity'] as num?)?.toInt() ?? 1;
+      final occ = (_spaces[index]['occupied'] as num?)?.toInt() ?? 0;
+      if (occ < cap) {
+        _spaces[index]['occupied'] = occ + 1;
+      }
+      _saveToDisk();
+      notifyListeners();
+    }
+  }
+
+  /// Release a booking on a host space, decrementing occupied count
+  void releaseBooking(String spotId) {
+    final index = _spaces.indexWhere((s) => s['id'] == spotId);
+    if (index != -1) {
+      final occ = (_spaces[index]['occupied'] as num?)?.toInt() ?? 0;
+      if (occ > 0) {
+        _spaces[index]['occupied'] = occ - 1;
+      }
+      _saveToDisk();
+      notifyListeners();
+    }
+  }
+
+  Future<void> _saveToDisk() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_keySpaces, jsonEncode(_spaces));
+    } catch (_) {}
   }
 }

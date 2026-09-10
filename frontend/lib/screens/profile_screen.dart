@@ -1,11 +1,150 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../l10n/app_strings.dart';
+import '../services/auth_service.dart';
+import '../services/vehicle_store.dart';
 import 'login_screen.dart';
 import 'host_dashboard_screen.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  void _showAddVehicleModal() {
+    final plateCtrl = TextEditingController();
+    final modelCtrl = TextEditingController();
+    final colorCtrl = TextEditingController(text: 'White');
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 24,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Add New Vehicle',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: modelCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Vehicle Model',
+                  hintText: 'e.g. Toyota Corolla, Hyundai Tucson',
+                  prefixIcon: Icon(Icons.directions_car_outlined),
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: plateCtrl,
+                textCapitalization: TextCapitalization.characters,
+                decoration: const InputDecoration(
+                  labelText: 'License Plate',
+                  hintText: 'e.g. Code 3 - B98765 AA',
+                  prefixIcon: Icon(Icons.pin_outlined),
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: colorCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Color',
+                  hintText: 'e.g. White, Silver, Black',
+                  prefixIcon: Icon(Icons.color_lens_outlined),
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: () {
+                    final plate = plateCtrl.text.trim();
+                    final model = modelCtrl.text.trim();
+                    final color = colorCtrl.text.trim();
+
+                    if (plate.isEmpty || model.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please fill in vehicle model and plate number')),
+                      );
+                      return;
+                    }
+
+                    VehicleStore.instance.addVehicle(
+                      plate: plate,
+                      model: model,
+                      color: color.isEmpty ? 'White' : color,
+                    );
+
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Vehicle $model ($plate) added!'),
+                        backgroundColor: AppColors.available,
+                      ),
+                    );
+                  },
+                  child: const Text('Save Vehicle'),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showDeleteVehicleConfirmation(VehicleItem vehicle) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove Vehicle?'),
+        content: Text('Are you sure you want to remove ${vehicle.model} (${vehicle.plate})?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.full),
+            onPressed: () {
+              VehicleStore.instance.removeVehicle(vehicle.id);
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Removed ${vehicle.model}')),
+              );
+            },
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,11 +159,19 @@ class ProfileScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Profile Header with Avatar & Edit Badge
-            Center(
-              child: Column(
-                children: [
-                  Stack(
+            // Profile Header with Live User Info
+            ListenableBuilder(
+              listenable: AuthService.instance,
+              builder: (context, _) {
+                final name = AuthService.instance.name?.isNotEmpty == true
+                    ? AuthService.instance.name!
+                    : 'Abebe Kebede';
+                final phone = AuthService.instance.phone?.isNotEmpty == true
+                    ? AuthService.instance.phone!
+                    : '+251 91 123 4567';
+
+                return Center(
+                  child: Column(
                     children: [
                       Container(
                         width: 96,
@@ -46,102 +193,118 @@ class ProfileScreen extends StatelessWidget {
                           ),
                         ),
                       ),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: const BoxDecoration(
-                            color: AppColors.primary,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.edit, size: 14, color: Colors.white),
+                      const SizedBox(height: 14),
+                      Text(
+                        name,
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
                         ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '$phone • Verified Driver',
+                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 14),
-                  const Text(
-                    'Abebe Kebede',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'abebe.k@example.com • +251 91 123 4567',
-                    style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-                  ),
-                ],
-              ),
+                );
+              },
             ),
 
             const SizedBox(height: 28),
 
-            // My Vehicles Section
-            Text(
-              AppStrings.myVehicles,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: AppColors.textSecondary,
-                letterSpacing: 1,
-              ),
+            // My Vehicles Section (Dynamically rendered from VehicleStore)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  AppStrings.myVehicles,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textSecondary,
+                    letterSpacing: 1,
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: _showAddVehicleModal,
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Add Vehicle'),
+                ),
+              ],
             ),
-            const SizedBox(height: 10),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryContainer.withValues(alpha: 0.4),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.directions_car, color: AppColors.primary),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          Text(
-                            'Toyota Vitz',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                          ),
-                          SizedBox(height: 2),
-                          Text(
-                            'White • Code 3 - A24561 AA',
-                            style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
-                          ),
-                        ],
+            const SizedBox(height: 6),
+
+            ListenableBuilder(
+              listenable: VehicleStore.instance,
+              builder: (context, _) {
+                final vehicles = VehicleStore.instance.vehicles;
+                if (vehicles.isEmpty) {
+                  return Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20.0),
+                      child: Center(
+                        child: Text(
+                          'No vehicles added yet.\nTap "+ Add Vehicle" to register one.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: AppColors.textSecondary.withValues(alpha: 0.8)),
+                        ),
                       ),
                     ),
-                    const Icon(Icons.chevron_right, color: AppColors.textSecondary),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              height: 46,
-              child: OutlinedButton.icon(
-                onPressed: () {},
-                icon: const Icon(Icons.add, size: 18),
-                label: Text(AppStrings.addVehicle),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: AppColors.border),
-                ),
-              ),
+                  );
+                }
+
+                return Column(
+                  children: vehicles.map((v) {
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      child: Padding(
+                        padding: const EdgeInsets.all(14.0),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: AppColors.primaryContainer.withValues(alpha: 0.4),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.directions_car, color: AppColors.primary),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    v.model,
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '${v.color} • ${v.plate}',
+                                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline, color: Colors.grey, size: 20),
+                              onPressed: () => _showDeleteVehicleConfirmation(v),
+                              tooltip: 'Remove vehicle',
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                );
+              },
             ),
 
-            const SizedBox(height: 28),
+            const SizedBox(height: 24),
 
             // Host Dashboard & Earnings Banner
             GestureDetector(
@@ -210,13 +373,29 @@ class ProfileScreen extends StatelessWidget {
               clipBehavior: Clip.antiAlias,
               child: Column(
                 children: [
-                  _buildSettingTile(Icons.credit_card, 'Payment Methods (Telebirr & CBE)', () {}),
+                  _buildSettingTile(Icons.credit_card, 'Payment Methods (Telebirr & CBE)', () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Payment gateway: Telebirr, CBE Birr & Card via Chapa')),
+                    );
+                  }),
                   const Divider(height: 1),
-                  _buildSettingTile(Icons.notifications_outlined, AppStrings.notifications, () {}),
+                  _buildSettingTile(Icons.notifications_outlined, AppStrings.notifications, () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Notifications enabled for parking pass updates')),
+                    );
+                  }),
                   const Divider(height: 1),
-                  _buildSettingTile(Icons.help_outline, AppStrings.helpSupport, () {}),
+                  _buildSettingTile(Icons.help_outline, AppStrings.helpSupport, () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('ParkEase Support: support@parkease.et')),
+                    );
+                  }),
                   const Divider(height: 1),
-                  _buildSettingTile(Icons.info_outline, AppStrings.aboutApp, () {}),
+                  _buildSettingTile(Icons.info_outline, AppStrings.aboutApp, () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('ParkEase v1.0.0 - Addis Ababa Smart Parking')),
+                    );
+                  }),
                 ],
               ),
             ),
@@ -228,7 +407,9 @@ class ProfileScreen extends StatelessWidget {
               width: double.infinity,
               height: 50,
               child: ElevatedButton.icon(
-                onPressed: () {
+                onPressed: () async {
+                  await AuthService.instance.logout();
+                  if (!context.mounted) return;
                   Navigator.pushAndRemoveUntil(
                     context,
                     MaterialPageRoute(builder: (_) => const LoginScreen()),

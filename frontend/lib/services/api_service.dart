@@ -1,9 +1,11 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/parking_spot.dart';
+import '../models/booking.dart';
 import 'api_config.dart';
 import 'auth_service.dart';
 import 'host_space_store.dart';
+import 'booking_store.dart';
 
 class ApiService {
   static Map<String, String> _getHeaders() {
@@ -149,6 +151,49 @@ class ApiService {
       }
     } catch (_) {}
     return null;
+  }
+
+  /// Fetches user's bookings from backend API and syncs with BookingStore
+  static Future<List<Booking>> getMyBookings() async {
+    try {
+      final response = await http
+          .get(
+            Uri.parse('${ApiConfig.bookings}/my'),
+            headers: _getHeaders(),
+          )
+          .timeout(const Duration(seconds: 4));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['data'] is List) {
+          final list = (data['data'] as List)
+              .map((json) => Booking.fromJson(json))
+              .toList();
+          if (list.isNotEmpty) {
+            BookingStore.instance.mergeFromApi(list);
+            return BookingStore.instance.bookings;
+          }
+        }
+      }
+    } catch (_) {}
+
+    return BookingStore.instance.bookings;
+  }
+
+  /// Cancels a booking
+  static Future<bool> cancelBooking(String bookingId) async {
+    BookingStore.instance.cancelBooking(bookingId);
+    try {
+      final response = await http
+          .patch(
+            Uri.parse('${ApiConfig.bookings}/$bookingId/cancel'),
+            headers: _getHeaders(),
+          )
+          .timeout(const Duration(seconds: 4));
+      return response.statusCode == 200;
+    } catch (_) {
+      return true; // Optimistic local fallback
+    }
   }
 
   /// Initializes a Chapa checkout session

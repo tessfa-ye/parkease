@@ -13,11 +13,27 @@ export interface HostApplicationDto {
 }
 
 export class HostsService {
+  private static fallbackHostSpots: any[] = [
+    {
+      id: 'host_spot_1',
+      title: 'Home Driveway & Garage',
+      address: 'Bole Sub-City, Wereda 03, Addis Ababa',
+      city: 'Addis Ababa',
+      spaceType: 'Driveway',
+      capacity: 2,
+      pricePerHour: 30.0,
+      isAvailable: true,
+      occupied: 1,
+      latitude: 9.0150,
+      longitude: 38.7640,
+      status: 'AVAILABLE',
+      imageUrl: 'https://images.unsplash.com/photo-1572120360610-d971b9d7767c?w=600',
+    },
+  ];
+
   static async submitListing(dto: HostApplicationDto) {
     const spotId = 'host_' + Math.random().toString(36).substring(2, 9);
-
-    // Register in fallback spots immediately so /api/spots includes it for explore
-    SpotsService.addFallbackSpot({
+    const hostSpot = {
       id: spotId,
       title: `${dto.spaceType} Parking Space`,
       address: 'Bole Sub-City, Addis Ababa',
@@ -31,11 +47,22 @@ export class HostsService {
       rating: 5.0,
       reviewCount: 0,
       spotType: 'PRIVATE_HOST',
+      spaceType: dto.spaceType,
+      capacity: dto.capacity,
+      isAvailable: true,
+      occupied: 0,
       status: 'AVAILABLE',
       amenities: ['Covered', 'Gated', 'Telebirr Pay'],
       imageUrl: 'https://images.unsplash.com/photo-1572120360610-d971b9d7767c?w=600',
       hostName: 'Private Host',
-    });
+      availableDays: dto.availableDays || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+      payoutMethod: dto.payoutMethod,
+      payoutAccount: dto.payoutAccount,
+    };
+
+    // Register in fallback spots immediately so /api/spots includes it for explore
+    SpotsService.addFallbackSpot(hostSpot);
+    HostsService.fallbackHostSpots.unshift(hostSpot);
 
     try {
       const listing = await prisma.hostListing.create({
@@ -88,19 +115,19 @@ export class HostsService {
       );
 
       return {
-        totalSpotsListed: spots.length,
+        totalSpotsListed: spots.length > 0 ? spots.length : HostsService.fallbackHostSpots.length,
         totalBookings,
         totalEarnings,
         currency: 'ETB',
-        spots,
+        spots: spots.length > 0 ? spots : HostsService.fallbackHostSpots,
       };
     } catch (err) {
       return {
-        totalSpotsListed: 1,
+        totalSpotsListed: HostsService.fallbackHostSpots.length,
         totalBookings: 14,
         totalEarnings: 3420,
         currency: 'ETB',
-        spots: [],
+        spots: HostsService.fallbackHostSpots,
       };
     }
   }
@@ -108,6 +135,13 @@ export class HostsService {
   static async toggleSpotStatus(spotId: string, isAvailable: boolean) {
     const newStatus = isAvailable ? 'AVAILABLE' : 'FULL';
     SpotsService.updateFallbackSpotStatus(spotId, isAvailable);
+
+    const fallbackSpot = HostsService.fallbackHostSpots.find((s) => s.id === spotId);
+    if (fallbackSpot) {
+      fallbackSpot.isAvailable = isAvailable;
+      fallbackSpot.status = newStatus;
+    }
+
     try {
       const updated = await prisma.parkingSpot.update({
         where: { id: spotId },

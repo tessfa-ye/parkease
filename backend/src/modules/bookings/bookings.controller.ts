@@ -60,4 +60,20 @@ export class BookingsController {
       next(error);
     }
   }
+
+  static async cancelBooking(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      const userId = req.user?.userId || 'guest_user';
+      const cancelled = await BookingsService.cancelBooking(id, userId);
+
+      res.status(200).json({
+        success: true,
+        message: 'Booking cancelled successfully',
+        data: cancelled,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }

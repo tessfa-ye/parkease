@@ -245,7 +245,25 @@ class PaymentScreen extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 height: 52,
-                child: ElevatedButton(
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const MainNavigationShell(initialIndex: 1),
+                      ),
+                      (route) => false,
+                    );
+                  },
+                  icon: const Icon(Icons.confirmation_number_outlined),
+                  label: const Text('View in My Trips / Bookings'),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: OutlinedButton(
                   onPressed: () {
                     Navigator.pushAndRemoveUntil(
                       context,
@@ -253,22 +271,18 @@ class PaymentScreen extends StatelessWidget {
                       (route) => false,
                     );
                   },
-                  child: const Text('Back to Home'),
+                  child: const Text('Back to Explore Map'),
                 ),
               ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Receipt downloaded successfully!')),
-                    );
-                  },
-                  icon: const Icon(Icons.download),
-                  label: const Text('Download Receipt'),
-                ),
+              const SizedBox(height: 10),
+              TextButton.icon(
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Digital pass receipt saved to device!')),
+                  );
+                },
+                icon: const Icon(Icons.download_outlined, size: 18),
+                label: const Text('Download PDF Receipt'),
               ),
             ],
           ),
