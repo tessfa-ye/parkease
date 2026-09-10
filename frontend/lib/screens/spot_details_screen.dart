@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/parking_spot.dart';
 import '../theme/app_theme.dart';
 import 'booking_confirmation_screen.dart';
+import '../services/map_launcher_service.dart';
 
 class SpotDetailsScreen extends StatelessWidget {
   final ParkingSpot spot;
@@ -119,7 +120,7 @@ class SpotDetailsScreen extends StatelessWidget {
                                 ? NetworkImage(spot.hostPhotoUrl!)
                                 : null,
                             child: spot.hostPhotoUrl == null
-                                ? const Icon(Icons.person)
+                                ? Text(spot.hostName![0], style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFEA580C)))
                                 : null,
                           ),
                           const SizedBox(width: 12),
@@ -127,50 +128,50 @@ class SpotDetailsScreen extends StatelessWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  'Hosted by ${spot.hostName}',
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                                ),
                                 Row(
                                   children: [
-                                    const Icon(Icons.star, size: 13, color: Color(0xFFF59E0B)),
-                                    const SizedBox(width: 3),
                                     Text(
-                                      '${spot.hostRating?.toStringAsFixed(1) ?? '4.9'} • Private Host',
-                                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                      spot.hostName!,
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                                     ),
+                                    const SizedBox(width: 4),
+                                    const Icon(Icons.verified, size: 14, color: Color(0xFFEA580C)),
                                   ],
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Private Space Host • ⭐ ${spot.hostRating?.toStringAsFixed(1) ?? '5.0'}',
+                                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
                                 ),
                               ],
                             ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.chat_bubble_outline, color: AppColors.primary, size: 22),
-                            onPressed: () {},
                           ),
                         ],
                       ),
                     ),
 
-                  if (spot.spotType == SpotType.privateHost) const SizedBox(height: 16),
+                  const SizedBox(height: 16),
 
-                  // Quick Info Grid
-                  GridView.count(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
-                    childAspectRatio: 2.4,
+                  // Info Tiles (Price, Available, Rating, Distance)
+                  Row(
                     children: [
-                      _infoTile(Icons.attach_money, spot.formattedPrice, 'Price'),
-                      _infoTile(Icons.near_me, spot.formattedDistance, 'Distance'),
-                      _infoTile(
-                        Icons.local_parking,
-                        '${spot.availableSpots}/${spot.totalSpots} free',
-                        'Availability',
+                      Expanded(child: _infoTile(Icons.payments_outlined, spot.formattedPrice, 'Hourly Rate')),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _infoTile(
+                          Icons.local_parking,
+                          '${spot.availableSpots}/${spot.totalSpots}',
+                          'Available',
+                        ),
                       ),
-                      _infoTile(Icons.star, '${spot.rating} (${spot.reviewCount})', 'Rating'),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(child: _infoTile(Icons.star_rounded, '${spot.rating} (${spot.reviewCount})', 'Rating')),
+                      const SizedBox(width: 10),
+                      Expanded(child: _infoTile(Icons.near_me_outlined, spot.formattedDistance, 'Distance')),
                     ],
                   ),
 
@@ -225,26 +226,51 @@ class SpotDetailsScreen extends StatelessWidget {
         ],
       ),
 
-      // Sticky Reserve Button
+      // Sticky Action Buttons (Directions + Reserve)
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-          child: SizedBox(
-            height: 52,
-            child: ElevatedButton(
-              onPressed: spot.status == SpotStatus.full
-                  ? null
-                  : () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => BookingConfirmationScreen(spot: spot),
-                        ),
-                      ),
-              child: Text(
-                spot.status == SpotStatus.full ? 'Spot Full — No Availability' : 'Reserve Now',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          child: Row(
+            children: [
+              SizedBox(
+                height: 52,
+                child: OutlinedButton.icon(
+                  onPressed: () => MapLauncherService.showDirectionsModal(
+                    context,
+                    latitude: spot.latitude,
+                    longitude: spot.longitude,
+                    title: spot.title,
+                    address: spot.address,
+                  ),
+                  icon: const Icon(Icons.directions, color: AppColors.primary),
+                  label: const Text('Directions'),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppColors.primary, width: 1.5),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: SizedBox(
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: spot.status == SpotStatus.full
+                        ? null
+                        : () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => BookingConfirmationScreen(spot: spot),
+                              ),
+                            ),
+                    child: Text(
+                      spot.status == SpotStatus.full ? 'Spot Full' : 'Reserve Now',
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),

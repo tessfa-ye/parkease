@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../models/parking_spot.dart';
 import '../theme/app_theme.dart';
+import '../services/map_launcher_service.dart';
 import 'main_navigation_shell.dart';
 
 class PaymentScreen extends StatelessWidget {
@@ -240,6 +241,28 @@ class PaymentScreen extends StatelessWidget {
               ),
 
               const SizedBox(height: 24),
+
+              // Turn-by-Turn Navigation Button
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton.icon(
+                  onPressed: () => MapLauncherService.showDirectionsModal(
+                    context,
+                    latitude: spot.latitude,
+                    longitude: spot.longitude,
+                    title: spot.title,
+                    address: spot.address,
+                  ),
+                  icon: const Icon(Icons.navigation, color: Colors.white),
+                  label: const Text('🚗 Start Driving Navigation', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF10B981),
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
 
               // Navigation Buttons
               SizedBox(

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
 import '../theme/app_theme.dart';
 import '../services/api_service.dart';
 import '../services/host_space_store.dart';
@@ -21,6 +23,12 @@ class _HostRegistrationScreenState extends State<HostRegistrationScreen> {
   final _addressController = TextEditingController();
   final _cityController = TextEditingController();
   String _selectedCountry = 'Ethiopia';
+
+  // Pinned coordinates (set via GPS or geocoding)
+  double? _pinnedLat;
+  double? _pinnedLng;
+  bool _locatingGps = false;
+  String _locationStatus = '';
 
   // Step 2 — Space Details
   String _spaceType = 'Driveway';
@@ -165,22 +173,66 @@ class _HostRegistrationScreenState extends State<HostRegistrationScreen> {
             decoration: _inputDecoration('Street Address / Landmark'),
           ),
           const SizedBox(height: 20),
+          // GPS / Geocode Location Picker
           Container(
-            height: 160,
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: AppColors.surfaceContainer,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.add_location_alt, size: 40, color: AppColors.primary),
-                  SizedBox(height: 8),
-                  Text('Tap to pin location on map', style: TextStyle(color: AppColors.textSecondary)),
-                ],
+              border: Border.all(
+                color: _pinnedLat != null ? AppColors.available : AppColors.border,
+                width: _pinnedLat != null ? 2 : 1,
               ),
+            ),
+            child: Column(
+              children: [
+                if (_pinnedLat != null) ...[
+                  const Icon(Icons.location_on, size: 36, color: AppColors.available),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Location pinned ✓',
+                    style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.available),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${_pinnedLat!.toStringAsFixed(5)}, ${_pinnedLng!.toStringAsFixed(5)}',
+                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  ),
+                ] else ...[
+                  const Icon(Icons.add_location_alt, size: 36, color: AppColors.primary),
+                  const SizedBox(height: 6),
+                  Text(
+                    _locationStatus.isEmpty
+                        ? 'No location pinned yet'
+                        : _locationStatus,
+                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _locatingGps ? null : _fetchGpsLocation,
+                    icon: _locatingGps
+                        ? const SizedBox(
+                            width: 16, height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.my_location),
+                    label: Text(_locatingGps ? 'Getting location…' : 'Use My Current Location'),
+                  ),
+                ),
+                if (_pinnedLat != null)
+                  TextButton(
+                    onPressed: () => setState(() {
+                      _pinnedLat = null;
+                      _pinnedLng = null;
+                      _locationStatus = '';
+                    }),
+                    child: const Text('Clear pin', style: TextStyle(color: AppColors.textSecondary)),
+                  ),
+              ],
             ),
           ),
         ],
@@ -385,6 +437,76 @@ class _HostRegistrationScreenState extends State<HostRegistrationScreen> {
     );
   }
 
+  /// Fetch current GPS position and update pinned coordinates
+  Future<void> _fetchGpsLocation() async {
+    setState(() {
+      _locatingGps = true;
+      _locationStatus = 'Requesting permission…';
+    });
+
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.deniedForever ||
+          permission == LocationPermission.denied) {
+        setState(() {
+          _locationStatus = 'Location permission denied. Enter address manually.';
+          _locatingGps = false;
+        });
+        return;
+      }
+
+      setState(() => _locationStatus = 'Getting your position…');
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      );
+
+      // Reverse geocode to fill address fields if empty
+      if (_addressController.text.trim().isEmpty ||
+          _cityController.text.trim().isEmpty) {
+        try {
+          final placemarks = await placemarkFromCoordinates(pos.latitude, pos.longitude);
+          if (placemarks.isNotEmpty) {
+            final p = placemarks.first;
+            if (_cityController.text.trim().isEmpty) {
+              _cityController.text = p.locality ?? p.subAdministrativeArea ?? '';
+            }
+            if (_addressController.text.trim().isEmpty) {
+              _addressController.text =
+                  [p.street, p.subLocality].where((s) => s != null && s.isNotEmpty).join(', ');
+            }
+          }
+        } catch (_) {}
+      }
+
+      setState(() {
+        _pinnedLat = pos.latitude;
+        _pinnedLng = pos.longitude;
+        _locationStatus = 'Location acquired!';
+        _locatingGps = false;
+      });
+    } catch (e) {
+      setState(() {
+        _locationStatus = 'Could not get location. Please enter address manually.';
+        _locatingGps = false;
+      });
+    }
+  }
+
+  /// Geocode the typed address into coordinates
+  Future<(double, double)> _geocodeAddress(String address) async {
+    try {
+      final locations = await locationFromAddress(address);
+      if (locations.isNotEmpty) {
+        return (locations.first.latitude, locations.first.longitude);
+      }
+    } catch (_) {}
+    // Fallback: Addis Ababa center
+    return (9.0150, 38.7640);
+  }
+
   void _submitListing() async {
     showDialog(
       context: context,
@@ -403,6 +525,20 @@ class _HostRegistrationScreenState extends State<HostRegistrationScreen> {
 
     final price = double.tryParse(_priceController.text) ?? 30.0;
 
+    // Build human-readable address string
+    final addressStr = _addressController.text.trim().isNotEmpty
+        ? '${_addressController.text.trim()}, ${_cityController.text.trim().isNotEmpty ? _cityController.text.trim() : _selectedCountry}'
+        : (_cityController.text.trim().isNotEmpty
+            ? '${_cityController.text.trim()}, $_selectedCountry'
+            : 'Addis Ababa, Ethiopia');
+
+    // Resolve coordinates: GPS pin > geocode address > fallback
+    double lat = _pinnedLat ?? 0.0;
+    double lng = _pinnedLng ?? 0.0;
+    if (_pinnedLat == null) {
+      (lat, lng) = await _geocodeAddress(addressStr);
+    }
+
     await ApiService.submitHostListing(
       spaceType: _spaceType,
       capacity: _capacity,
@@ -414,18 +550,17 @@ class _HostRegistrationScreenState extends State<HostRegistrationScreen> {
     );
 
     // Save to local store so it appears in the dashboard immediately
-    final address = _addressController.text.trim().isNotEmpty
-        ? '${_addressController.text.trim()}, ${_cityController.text.trim().isNotEmpty ? _cityController.text.trim() : _selectedCountry}'
-        : 'Addis Ababa';
     HostSpaceStore.instance.addSpace(
       spaceType: _spaceType,
       capacity: _capacity,
       dimensions: _dimensionsController.text.trim(),
       pricePerHour: price,
-      address: address,
+      address: addressStr,
       availableDays: activeDays,
       payoutMethod: _payoutMethod,
       payoutAccount: _payoutAccountController.text.trim(),
+      latitude: lat,
+      longitude: lng,
     );
 
     if (!mounted) return;

@@ -3,6 +3,7 @@ import '../models/booking.dart';
 import '../theme/app_theme.dart';
 import '../services/booking_store.dart';
 import '../services/api_service.dart';
+import '../services/map_launcher_service.dart';
 import 'payment_screen.dart';
 
 class TripHistoryScreen extends StatefulWidget {
@@ -250,11 +251,23 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> with SingleTicker
                       ),
                       Row(
                         children: [
-                          if (isActive)
+                          if (isActive) ...[
+                            TextButton.icon(
+                              onPressed: () => MapLauncherService.showDirectionsModal(
+                                context,
+                                latitude: booking.spot.latitude,
+                                longitude: booking.spot.longitude,
+                                title: booking.spot.title,
+                                address: booking.spot.address,
+                              ),
+                              icon: const Icon(Icons.directions, size: 16, color: Color(0xFF10B981)),
+                              label: const Text('Directions', style: TextStyle(color: Color(0xFF10B981), fontSize: 13, fontWeight: FontWeight.bold)),
+                            ),
                             TextButton(
                               onPressed: () => _showCancelDialog(booking),
                               child: const Text('Cancel', style: TextStyle(color: AppColors.full, fontSize: 13)),
                             ),
+                          ],
                           TextButton.icon(
                             onPressed: () {
                               Navigator.push(

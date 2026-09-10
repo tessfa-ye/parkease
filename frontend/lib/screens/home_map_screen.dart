@@ -7,6 +7,7 @@ import '../theme/app_theme.dart';
 import '../l10n/app_strings.dart';
 import '../services/api_service.dart';
 import '../services/host_space_store.dart';
+import '../services/map_launcher_service.dart';
 import 'spot_details_screen.dart';
 
 class HomeMapScreen extends StatefulWidget {
@@ -327,7 +328,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                   ),
 
                   SizedBox(
-                    height: _selectedSpot != null ? 200 : 180,
+                    height: _selectedSpot != null ? 226 : 180,
                     child: _selectedSpot != null
                         ? _buildSpotCard(_selectedSpot!, large: true)
                         : _spots.isEmpty
@@ -434,6 +435,45 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                 ),
               ],
             ),
+            if (large) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => MapLauncherService.showDirectionsModal(
+                        context,
+                        latitude: spot.latitude,
+                        longitude: spot.longitude,
+                        title: spot.title,
+                        address: spot.address,
+                      ),
+                      icon: const Icon(Icons.directions, size: 16, color: AppColors.primary),
+                      label: const Text('Directions', style: TextStyle(fontSize: 12)),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        side: const BorderSide(color: AppColors.primary),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => SpotDetailsScreen(spot: spot)),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      child: const Text('View Spot', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),
