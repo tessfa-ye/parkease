@@ -1,4 +1,5 @@
 import { prisma } from '../../config/db';
+import { SpotsService } from '../spots/spots.service';
 
 export interface HostApplicationDto {
   userId: string;
@@ -13,6 +14,29 @@ export interface HostApplicationDto {
 
 export class HostsService {
   static async submitListing(dto: HostApplicationDto) {
+    const spotId = 'host_' + Math.random().toString(36).substring(2, 9);
+
+    // Register in fallback spots immediately so /api/spots includes it for explore
+    SpotsService.addFallbackSpot({
+      id: spotId,
+      title: `${dto.spaceType} Parking Space`,
+      address: 'Bole Sub-City, Addis Ababa',
+      city: 'Addis Ababa',
+      countryCode: 'ET',
+      latitude: 9.0150 + (Math.random() * 0.02 - 0.01),
+      longitude: 38.7640 + (Math.random() * 0.02 - 0.01),
+      pricePerHour: dto.pricePerHour,
+      totalSpots: dto.capacity,
+      availableSpots: dto.capacity,
+      rating: 5.0,
+      reviewCount: 0,
+      spotType: 'PRIVATE_HOST',
+      status: 'AVAILABLE',
+      amenities: ['Covered', 'Gated', 'Telebirr Pay'],
+      imageUrl: 'https://images.unsplash.com/photo-1572120360610-d971b9d7767c?w=600',
+      hostName: 'Private Host',
+    });
+
     try {
       const listing = await prisma.hostListing.create({
         data: {
@@ -38,7 +62,7 @@ export class HostsService {
     } catch (err) {
       // Fallback
       return {
-        id: 'host_' + Math.random().toString(36).substring(2, 9),
+        id: spotId,
         ...dto,
         status: 'PENDING_APPROVAL',
         createdAt: new Date(),
@@ -83,6 +107,7 @@ export class HostsService {
 
   static async toggleSpotStatus(spotId: string, isAvailable: boolean) {
     const newStatus = isAvailable ? 'AVAILABLE' : 'FULL';
+    SpotsService.updateFallbackSpotStatus(spotId, isAvailable);
     try {
       const updated = await prisma.parkingSpot.update({
         where: { id: spotId },

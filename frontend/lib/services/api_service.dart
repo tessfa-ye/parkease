@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import '../models/parking_spot.dart';
 import 'api_config.dart';
 import 'auth_service.dart';
+import 'host_space_store.dart';
 
 class ApiService {
   static Map<String, String> _getHeaders() {
@@ -13,7 +14,8 @@ class ApiService {
     };
   }
 
-  /// Fetches parking spots from the backend API with proximity & filters
+  /// Fetches parking spots from the backend API with proximity & filters,
+  /// seamlessly merging real-time spaces listed by the host
   static Future<List<ParkingSpot>> getSpots({
     double? lat,
     double? lng,
@@ -29,6 +31,7 @@ class ApiService {
     if (search != null && search.isNotEmpty) queryParams['search'] = search;
 
     final uri = Uri.parse(ApiConfig.spots).replace(queryParameters: queryParams.isNotEmpty ? queryParams : null);
+    List<ParkingSpot> spots = [];
 
     try {
       final response = await http.get(uri, headers: _getHeaders()).timeout(const Duration(seconds: 4));
@@ -36,26 +39,78 @@ class ApiService {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true && data['data'] is List) {
-          return (data['data'] as List).map((json) => ParkingSpot.fromJson(json)).toList();
+          spots = (data['data'] as List).map((json) => ParkingSpot.fromJson(json)).toList();
         }
       }
     } catch (e) {
       // Graceful offline fallback
     }
 
-    // Fallback to sample spots if backend is offline/unreachable
-    return _filterFallbackSpots(spotType: spotType, search: search);
+    if (spots.isEmpty) {
+      spots = _filterFallbackSpots(spotType: spotType, search: search);
+    }
+
+    // Merge host spaces registered in the app session
+    final hostSpots = HostSpaceStore.instance.toParkingSpots();
+    for (final hostSpot in hostSpots) {
+      final existingIndex = spots.indexWhere((s) => s.id == hostSpot.id || (hostSpot.id == 'host_spot_1' && s.id == '4'));
+      if (existingIndex >= 0) {
+        // Synchronize availability and status with host dashboard
+        final current = spots[existingIndex];
+        spots[existingIndex] = ParkingSpot(
+          id: current.id,
+          title: current.title,
+          address: current.address,
+          city: current.city,
+          countryCode: current.countryCode,
+          latitude: current.latitude,
+          longitude: current.longitude,
+          pricePerHour: hostSpot.pricePerHour,
+          distanceKm: current.distanceKm,
+          totalSpots: hostSpot.totalSpots,
+          availableSpots: hostSpot.availableSpots,
+          rating: current.rating,
+          reviewCount: current.reviewCount,
+          spotType: current.spotType,
+          status: hostSpot.status,
+          amenities: current.amenities,
+          imageUrl: current.imageUrl,
+          hostName: current.hostName,
+          hostPhotoUrl: current.hostPhotoUrl,
+          hostRating: current.hostRating,
+        );
+      } else {
+        // Newly added host space: check filter matching
+        final bool matchesType = spotType == null || spotType == 'all' || spotType == 'private';
+        final bool matchesSearch = search == null ||
+            search.isEmpty ||
+            hostSpot.title.toLowerCase().contains(search.toLowerCase()) ||
+            hostSpot.address.toLowerCase().contains(search.toLowerCase());
+
+        if (matchesType && matchesSearch) {
+          // Display the newly created spot prominently at the front
+          spots.insert(0, hostSpot);
+        }
+      }
+    }
+
+    return spots;
   }
 
   static List<ParkingSpot> _filterFallbackSpots({String? spotType, String? search}) {
-    var spots = ParkingSpot.sampleSpots;
+    var spots = List<ParkingSpot>.from(ParkingSpot.sampleSpots);
     if (spotType != null && spotType != 'all') {
-      if (spotType == 'government') {
+      final t = spotType.toLowerCase();
+      if (t == 'government') {
         spots = spots.where((s) => s.spotType == SpotType.government).toList();
-      } else if (spotType == 'commercial') {
+      } else if (t == 'commercial') {
         spots = spots.where((s) => s.spotType == SpotType.commercial).toList();
-      } else if (spotType == 'private') {
+      } else if (t == 'private' || t == 'private_host') {
         spots = spots.where((s) => s.spotType == SpotType.privateHost).toList();
+      } else if (t == 'covered') {
+        spots = spots.where((s) => s.amenities.any((a) => a.toLowerCase().contains('covered'))).toList();
+      } else if (t == 'ev' || t == 'ev charging') {
+        spots = spots.where((s) => s.amenities.any((a) => a.toLowerCase().contains('ev'))).toList();
       }
     }
     if (search != null && search.isNotEmpty) {

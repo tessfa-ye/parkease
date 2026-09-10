@@ -152,10 +152,25 @@ export class SpotsService {
       };
     });
 
-    // Filter by spotType
+    // Filter by spotType or category filter
     if (query.spotType && query.spotType.toLowerCase() !== 'all') {
-      const targetType = query.spotType.toUpperCase();
-      results = results.filter((s) => s.spotType === targetType);
+      const target = query.spotType.toLowerCase();
+      if (target === 'private' || target === 'private_host') {
+        results = results.filter(
+          (s) => s.spotType === 'PRIVATE_HOST' || s.spotType === 'PRIVATE'
+        );
+      } else if (target === 'covered') {
+        results = results.filter(
+          (s) => s.amenities && s.amenities.some((a: string) => a.toLowerCase().includes('covered'))
+        );
+      } else if (target === 'ev' || target === 'ev charging') {
+        results = results.filter(
+          (s) => s.amenities && s.amenities.some((a: string) => a.toLowerCase().includes('ev'))
+        );
+      } else {
+        const targetType = query.spotType.toUpperCase();
+        results = results.filter((s) => s.spotType === targetType);
+      }
     }
 
     // Filter by amenity
@@ -200,5 +215,17 @@ export class SpotsService {
       throw new Error(`Parking spot with ID ${id} not found`);
     }
     return fallback;
+  }
+
+  static addFallbackSpot(spot: any) {
+    fallbackSpots.unshift(spot);
+  }
+
+  static updateFallbackSpotStatus(spotId: string, isAvailable: boolean) {
+    const spot = fallbackSpots.find((s) => s.id === spotId);
+    if (spot) {
+      spot.status = isAvailable ? 'AVAILABLE' : 'FULL';
+      spot.availableSpots = isAvailable ? spot.totalSpots : 0;
+    }
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
+import '../services/host_space_store.dart';
 import 'host_registration_screen.dart';
 
 class HostDashboardScreen extends StatefulWidget {
@@ -18,19 +19,8 @@ class _HostDashboardScreenState extends State<HostDashboardScreen> {
   int _totalSpaces = 1;
   String _currency = 'ETB';
 
-  // Sample managed host spaces
-  final List<Map<String, dynamic>> _spaces = [
-    {
-      'id': 'host_spot_1',
-      'title': "Home Driveway & Garage",
-      'address': 'Bole Sub-City, Wereda 03, Addis Ababa',
-      'spaceType': 'Driveway',
-      'capacity': 2,
-      'pricePerHour': 30.0,
-      'isAvailable': true,
-      'occupied': 1,
-    },
-  ];
+  // Managed host spaces — loaded from HostSpaceStore
+  List<Map<String, dynamic>> _spaces = [];
 
   // Active parked cars
   final List<Map<String, String>> _activeParkedCars = [
@@ -54,20 +44,33 @@ class _HostDashboardScreenState extends State<HostDashboardScreen> {
     setState(() => _isLoading = true);
     final data = await ApiService.getHostDashboard();
 
+    // Merge any API-returned spots into the local store
+    if (data != null && data['spots'] is List && (data['spots'] as List).isNotEmpty) {
+      HostSpaceStore.instance.mergeFromApi(data['spots'] as List);
+    }
+
     if (mounted) {
       setState(() {
         _isLoading = false;
+        // Always read the authoritative list from the store
+        _spaces = List<Map<String, dynamic>>.from(
+          HostSpaceStore.instance.spaces.map((s) => Map<String, dynamic>.from(s)),
+        );
         if (data != null) {
           _totalEarnings = (data['totalEarnings'] as num?)?.toDouble() ?? 3420.0;
           _totalBookings = (data['totalBookings'] as num?)?.toInt() ?? 14;
-          _totalSpaces = (data['totalSpotsListed'] as num?)?.toInt() ?? 1;
+          _totalSpaces = _spaces.length;
           _currency = data['currency'] ?? 'ETB';
+        } else {
+          _totalSpaces = _spaces.length;
         }
       });
     }
   }
 
   Future<void> _toggleSpaceAvailability(int index, bool newValue) async {
+    // Update both the local UI list and the persistent store
+    HostSpaceStore.instance.toggleAvailability(index, newValue);
     setState(() {
       _spaces[index]['isAvailable'] = newValue;
     });
@@ -290,11 +293,13 @@ class _HostDashboardScreenState extends State<HostDashboardScreen> {
                         style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textSecondary, letterSpacing: 1),
                       ),
                       TextButton.icon(
-                        onPressed: () {
-                          Navigator.push(
+                        onPressed: () async {
+                          await Navigator.push(
                             context,
                             MaterialPageRoute(builder: (_) => const HostRegistrationScreen()),
                           );
+                          // Refresh after returning from registration
+                          _loadDashboardData();
                         },
                         icon: const Icon(Icons.add, size: 16),
                         label: const Text('Add Space'),

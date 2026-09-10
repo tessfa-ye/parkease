@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../services/api_service.dart';
+import '../services/host_space_store.dart';
 import 'host_dashboard_screen.dart';
 
 /// Multi-step host registration screen — allows users to list
@@ -407,6 +408,21 @@ class _HostRegistrationScreenState extends State<HostRegistrationScreen> {
       capacity: _capacity,
       dimensions: _dimensionsController.text.trim(),
       pricePerHour: price,
+      availableDays: activeDays,
+      payoutMethod: _payoutMethod,
+      payoutAccount: _payoutAccountController.text.trim(),
+    );
+
+    // Save to local store so it appears in the dashboard immediately
+    final address = _addressController.text.trim().isNotEmpty
+        ? '${_addressController.text.trim()}, ${_cityController.text.trim().isNotEmpty ? _cityController.text.trim() : _selectedCountry}'
+        : 'Addis Ababa';
+    HostSpaceStore.instance.addSpace(
+      spaceType: _spaceType,
+      capacity: _capacity,
+      dimensions: _dimensionsController.text.trim(),
+      pricePerHour: price,
+      address: address,
       availableDays: activeDays,
       payoutMethod: _payoutMethod,
       payoutAccount: _payoutAccountController.text.trim(),

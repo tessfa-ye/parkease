@@ -6,6 +6,7 @@ import '../models/parking_spot.dart';
 import '../theme/app_theme.dart';
 import '../l10n/app_strings.dart';
 import '../services/api_service.dart';
+import '../services/host_space_store.dart';
 import 'spot_details_screen.dart';
 
 class HomeMapScreen extends StatefulWidget {
@@ -45,8 +46,21 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   @override
   void initState() {
     super.initState();
+    HostSpaceStore.instance.addListener(_onHostStoreChanged);
     _fetchSpots();
     _goToCurrentLocation();
+  }
+
+  void _onHostStoreChanged() {
+    if (mounted) {
+      _fetchSpots();
+    }
+  }
+
+  @override
+  void dispose() {
+    HostSpaceStore.instance.removeListener(_onHostStoreChanged);
+    super.dispose();
   }
 
   Future<void> _fetchSpots() async {
