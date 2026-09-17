@@ -13,6 +13,7 @@ class Booking {
   final String qrCodeData;
   final String vehiclePlate;
   final BookingStatus status;
+  final String? txRef;
 
   const Booking({
     required this.id,
@@ -25,6 +26,7 @@ class Booking {
     required this.qrCodeData,
     required this.vehiclePlate,
     required this.status,
+    this.txRef,
   });
 
   factory Booking.fromJson(Map<String, dynamic> json) {
@@ -63,6 +65,7 @@ class Booking {
       qrCodeData: json['qrCodeData'] ?? 'PARKEASE-PASS-${json['id']}',
       vehiclePlate: json['vehiclePlate'] ?? 'Code 3 - A24561 AA',
       status: status,
+      txRef: json['txRef'] as String?,
     );
   }
 
@@ -79,12 +82,14 @@ class Booking {
       'qrCodeData': qrCodeData,
       'vehiclePlate': vehiclePlate,
       'status': status.name.toUpperCase(),
+      if (txRef != null) 'txRef': txRef,
     };
   }
 
   Booking copyWith({
     BookingStatus? status,
     DateTime? endTime,
+    String? txRef,
   }) {
     return Booking(
       id: id,
@@ -97,6 +102,7 @@ class Booking {
       qrCodeData: qrCodeData,
       vehiclePlate: vehiclePlate,
       status: status ?? this.status,
+      txRef: txRef ?? this.txRef,
     );
   }
 

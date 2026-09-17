@@ -38,3 +38,26 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
     return;
   }
 };
+
+export const optionalAuthenticateToken = (req: AuthRequest, res: Response, next: NextFunction): void => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return next();
+  }
+
+  try {
+    const decoded = jwt.verify(token, env.JWT_SECRET) as {
+      userId: string;
+      phone: string;
+      role: string;
+    };
+    req.user = decoded;
+    next();
+  } catch (err) {
+    // If token is invalid or expired, continue as guest
+    next();
+  }
+};
+

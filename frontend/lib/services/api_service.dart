@@ -205,17 +205,21 @@ class ApiService {
     String? name,
   }) async {
     try {
+      final payload = <String, dynamic>{
+        'bookingId': bookingId,
+        'amount': amount,
+        'email': (email != null && email.isNotEmpty) ? email : 'driver@gmail.com',
+        'name': (name != null && name.isNotEmpty) ? name : 'ParkEase Driver',
+      };
+      if (phone != null && phone.isNotEmpty) {
+        payload['phone'] = phone;
+      }
+
       final response = await http
           .post(
             Uri.parse(ApiConfig.paymentsInitialize),
             headers: _getHeaders(),
-            body: jsonEncode({
-              'bookingId': bookingId,
-              'amount': amount,
-              'phone': phone,
-              'email': email ?? 'driver@parkease.et',
-              'name': name ?? 'ParkEase Driver',
-            }),
+            body: jsonEncode(payload),
           )
           .timeout(const Duration(seconds: 5));
 

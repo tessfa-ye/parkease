@@ -1,13 +1,14 @@
 import { Router } from 'express';
 import { BookingsController } from './bookings.controller';
-import { authenticateToken } from '../../middlewares/auth.middleware';
+import { optionalAuthenticateToken } from '../../middlewares/auth.middleware';
 
 const router = Router();
 
-// Allow authenticated bookings (or fallback token)
-router.post('/', authenticateToken, BookingsController.createBooking);
-router.get('/my', authenticateToken, BookingsController.getMyBookings);
-router.get('/:id', authenticateToken, BookingsController.getBookingById);
-router.patch('/:id/cancel', authenticateToken, BookingsController.cancelBooking);
+// Allow authenticated users or guests to book and view bookings
+router.post('/', optionalAuthenticateToken, BookingsController.createBooking);
+router.get('/my', optionalAuthenticateToken, BookingsController.getMyBookings);
+router.get('/:id', optionalAuthenticateToken, BookingsController.getBookingById);
+router.patch('/:id/cancel', optionalAuthenticateToken, BookingsController.cancelBooking);
 
 export const bookingsRoutes = router;
+

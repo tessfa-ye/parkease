@@ -8,6 +8,7 @@ import '../services/auth_service.dart';
 import '../services/booking_store.dart';
 import '../services/vehicle_store.dart';
 import '../services/host_space_store.dart';
+import '../services/payment_verification_service.dart';
 import 'payment_screen.dart';
 
 class BookingConfirmationScreen extends StatefulWidget {
@@ -29,6 +30,16 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
   late String _selectedVehicle;
   String _selectedPaymentMethod = 'Telebirr (via Chapa)';
   bool _isProcessing = false;
+  String _processingLabel = 'Opening Chapa Checkout...';
+
+  // Lifecycle listener to detect when user returns from browser
+  AppLifecycleListener? _lifecycleListener;
+  bool _chapaLaunched = false;
+  String? _pendingTxRef;
+  String? _pendingBookingId;
+  String? _pendingQrCodeData;
+  double? _pendingGrandTotal;
+  Booking? _pendingBooking;
 
   @override
   void initState() {
@@ -43,11 +54,17 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
     }
 
     VehicleStore.instance.addListener(_onVehicleStoreChanged);
+
+    // Set up lifecycle listener to detect app returning from browser
+    _lifecycleListener = AppLifecycleListener(
+      onResume: _onAppResumed,
+    );
   }
 
   @override
   void dispose() {
     VehicleStore.instance.removeListener(_onVehicleStoreChanged);
+    _lifecycleListener?.dispose();
     super.dispose();
   }
 
@@ -61,12 +78,144 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
     }
   }
 
+  /// Called when the app resumes focus (user returns from Chapa browser page)
+  Future<void> _onAppResumed() async {
+    if (!_chapaLaunched || _pendingTxRef == null) return;
+    _chapaLaunched = false;
+
+    if (!mounted) return;
+    setState(() {
+      _isProcessing = true;
+      _processingLabel = 'Verifying payment…';
+    });
+
+    // Poll backend to verify payment
+    final result = await PaymentVerificationService.verify(_pendingTxRef!);
+
+    if (!mounted) return;
+
+    if (result.isSuccess) {
+      _navigateToSuccess(qrCode: result.qrCodeData);
+    } else {
+      setState(() => _isProcessing = false);
+      _showPaymentError(result.status);
+    }
+  }
+
+  void _navigateToSuccess({String? qrCode}) {
+    if (_pendingBooking == null || _pendingGrandTotal == null) return;
+    final booking = _pendingBooking!;
+    final confirmedBooking = Booking(
+      id: booking.id,
+      spot: booking.spot,
+      startTime: booking.startTime,
+      endTime: booking.endTime,
+      durationHours: booking.durationHours,
+      totalPriceETB: booking.totalPriceETB,
+      slotNumber: booking.slotNumber,
+      vehiclePlate: booking.vehiclePlate,
+      status: BookingStatus.active,
+      qrCodeData: qrCode ?? booking.qrCodeData,
+      txRef: _pendingTxRef,
+    );
+    BookingStore.instance.addBooking(confirmedBooking);
+    HostSpaceStore.instance.recordBooking(widget.spot.id);
+
+    setState(() => _isProcessing = false);
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PaymentScreen(
+          spot: widget.spot,
+          durationHours: _durationHours,
+          totalPriceETB: _pendingGrandTotal!,
+          vehiclePlate: _selectedVehicle,
+          bookingId: _pendingBookingId,
+          qrCodeData: qrCode ?? _pendingQrCodeData,
+          txRef: _pendingTxRef,
+          paymentMethod: _selectedPaymentMethod,
+        ),
+      ),
+    );
+  }
+
+  void _showPaymentError(PaymentVerificationStatus status) {
+    final message = status == PaymentVerificationStatus.timeout
+        ? 'Could not confirm your payment. Please check your Chapa transaction history or try again.'
+        : 'Payment was not completed. You can retry with Test Card Payment, or confirm directly in sandbox mode.';
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Payment Status'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              if (_pendingTxRef != null) {
+                _relaunchChapa();
+              }
+            },
+            child: const Text('Retry Payment'),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            onPressed: () {
+              Navigator.pop(context);
+              _navigateToSuccess(qrCode: _pendingQrCodeData);
+            },
+            icon: const Icon(Icons.check_circle_outline, color: Colors.white, size: 18),
+            label: const Text('Confirm (Sandbox)', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _relaunchChapa() async {
+    if (_pendingTxRef == null || _pendingGrandTotal == null) return;
+    setState(() {
+      _isProcessing = true;
+      _processingLabel = 'Reopening Chapa Checkout...';
+    });
+
+    final paymentInit = await ApiService.initializePayment(
+      bookingId: _pendingBookingId ?? _pendingTxRef!,
+      amount: _pendingGrandTotal!,
+      phone: AuthService.instance.phone,
+      name: AuthService.instance.name,
+    );
+
+    final checkoutUrl = paymentInit?['checkoutUrl'];
+    setState(() => _isProcessing = false);
+
+    if (checkoutUrl != null && checkoutUrl.isNotEmpty) {
+      try {
+        final uri = Uri.parse(checkoutUrl);
+        if (await canLaunchUrl(uri)) {
+          _chapaLaunched = true;
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        }
+      } catch (_) {}
+    }
+  }
+
   Future<void> _handlePayAndReserve(double grandTotal) async {
-    setState(() => _isProcessing = true);
+    setState(() {
+      _isProcessing = true;
+      _processingLabel = 'Creating your reservation…';
+    });
 
     final startTime = DateTime.now();
 
-    // 1. Create booking on backend
+    // 1. Create booking on backend (status stays PENDING until payment verified)
     final booking = await ApiService.createBooking(
       spotId: widget.spot.id,
       vehiclePlate: _selectedVehicle,
@@ -77,11 +226,13 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
 
     final bookingId = booking?['id'] ?? 'BK-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
     final qrCodeData = booking?['qrCodeData'] ?? 'PARKEASE-PASS-$bookingId';
-
     final slotNumber = '${widget.spot.city.split(" ").first}-Slot-${(widget.spot.availableSpots % 25) + 1}';
 
-    // 2. Persist booking to live client store so it instantly reflects in TripHistoryScreen
-    final newBooking = Booking(
+    // 2. Hold booking info in pending state — NOT committed to BookingStore yet
+    _pendingBookingId = bookingId;
+    _pendingQrCodeData = qrCodeData;
+    _pendingGrandTotal = grandTotal;
+    _pendingBooking = Booking(
       id: bookingId,
       spot: widget.spot,
       startTime: startTime,
@@ -93,12 +244,9 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
       status: BookingStatus.active,
       qrCodeData: qrCodeData,
     );
-    BookingStore.instance.addBooking(newBooking);
 
-    // 3. Update host space occupancy if it is a host space
-    HostSpaceStore.instance.recordBooking(widget.spot.id);
-
-    // 4. Initialize Chapa Checkout
+    // 3. Initialize Chapa Checkout
+    setState(() => _processingLabel = 'Opening Chapa Checkout...');
     final paymentInit = await ApiService.initializePayment(
       bookingId: bookingId,
       amount: grandTotal,
@@ -107,40 +255,42 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
     );
 
     final checkoutUrl = paymentInit?['checkoutUrl'];
-    final txRef = paymentInit?['txRef'] ?? 'PE-TX-${DateTime.now().millisecondsSinceEpoch}';
+    _pendingTxRef = paymentInit?['txRef'] ?? 'PE-TX-${DateTime.now().millisecondsSinceEpoch}';
 
-    // 5. Launch Chapa checkout if available
+    // 4. Launch Chapa checkout in external browser
+    bool launched = false;
     if (checkoutUrl != null && checkoutUrl.isNotEmpty) {
       try {
         final uri = Uri.parse(checkoutUrl);
         if (await canLaunchUrl(uri)) {
+          _chapaLaunched = true;
+          launched = true;
+          setState(() => _processingLabel = 'Waiting for payment…');
           await launchUrl(uri, mode: LaunchMode.externalApplication);
         }
-      } catch (_) {
-        // Fallback for mock sandbox URLs
-      }
+      } catch (_) {}
     }
 
-    setState(() => _isProcessing = false);
+    // 5. If URL could not be launched (emulator/sandbox), auto-verify immediately
+    if (!launched) {
+      _chapaLaunched = false;
+      setState(() => _processingLabel = 'Verifying payment…');
+      final result = await PaymentVerificationService.verify(_pendingTxRef!);
+      if (!mounted) return;
 
-    if (!mounted) return;
+      setState(() => _isProcessing = false);
 
-    // 6. Navigate to Digital Pass confirmation screen
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => PaymentScreen(
-          spot: widget.spot,
-          durationHours: _durationHours,
-          totalPriceETB: grandTotal,
-          vehiclePlate: _selectedVehicle,
-          bookingId: bookingId,
-          qrCodeData: qrCodeData,
-          txRef: txRef,
-          paymentMethod: _selectedPaymentMethod,
-        ),
-      ),
-    );
+      if (result.isSuccess) {
+        _navigateToSuccess(qrCode: result.qrCodeData);
+      } else {
+        setState(() => _isProcessing = false);
+        _showPaymentError(result.status);
+      }
+      return;
+    }
+
+    // Keep spinner visible while waiting for app to resume from browser
+    // _onAppResumed() will handle the rest when user comes back
   }
 
   @override
@@ -343,21 +493,40 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
               child: ElevatedButton(
                 onPressed: _isProcessing ? null : () => _handlePayAndReserve(grandTotal),
                 child: _isProcessing
-                    ? const Row(
+                    ? Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          SizedBox(
+                          const SizedBox(
                             width: 20,
                             height: 20,
                             child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                           ),
-                          SizedBox(width: 12),
-                          Text('Opening Chapa Checkout...'),
+                          const SizedBox(width: 12),
+                          Text(_processingLabel),
                         ],
                       )
                     : Text('Pay $currency ${grandTotal.toStringAsFixed(0)} & Reserve'),
               ),
             ),
+            if (_isProcessing) ...[
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  TextButton.icon(
+                    onPressed: () => setState(() => _isProcessing = false),
+                    icon: const Icon(Icons.close, size: 16),
+                    label: const Text('Cancel'),
+                  ),
+                  const SizedBox(width: 16),
+                  TextButton.icon(
+                    onPressed: () => _navigateToSuccess(qrCode: _pendingQrCodeData),
+                    icon: const Icon(Icons.check_circle_outline, size: 16, color: AppColors.primary),
+                    label: const Text('Confirm (Sandbox)', style: TextStyle(color: AppColors.primary)),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 16),
           ],
         ),

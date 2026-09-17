@@ -5,16 +5,22 @@ import { PaymentsService } from './payments.service';
 const initPaymentSchema = z.object({
   bookingId: z.string().min(1, 'Booking ID is required'),
   amount: z.number().min(1),
-  phone: z.string().optional(),
-  email: z.string().email().optional(),
-  name: z.string().optional(),
+  phone: z.string().nullable().optional(),
+  email: z.string().email().nullable().optional(),
+  name: z.string().nullable().optional(),
 });
 
 export class PaymentsController {
   static async initializeCheckout(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const validated = initPaymentSchema.parse(req.body);
-      const result = await PaymentsService.initializeCheckout(validated);
+      const result = await PaymentsService.initializeCheckout({
+        bookingId: validated.bookingId,
+        amount: validated.amount,
+        phone: validated.phone || undefined,
+        email: validated.email || undefined,
+        name: validated.name || undefined,
+      });
 
       res.status(200).json({
         success: true,
