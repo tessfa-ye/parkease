@@ -10,7 +10,15 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev"
   },
-  "keywords": ["parking", "smart-city", "chapa", "telebirr", "express", "typescript", "prisma"],
+  "keywords": [
+    "parking",
+    "smart-city",
+    "chapa",
+    "telebirr",
+    "express",
+    "typescript",
+    "prisma"
+  ],
   "author": "ParkEase Team",
   "license": "ISC",
   "dependencies": {

@@ -228,4 +228,77 @@ export class SpotsService {
       spot.availableSpots = isAvailable ? spot.totalSpots : 0;
     }
   }
+
+  static async decrementAvailableSpots(spotId: string): Promise<number> {
+    const fallback = fallbackSpots.find((s) => s.id === spotId);
+    let newAvailable = 0;
+    if (fallback) {
+      fallback.availableSpots = Math.max(0, (fallback.availableSpots ?? 1) - 1);
+      newAvailable = fallback.availableSpots;
+      if (fallback.availableSpots === 0) {
+        fallback.status = 'FULL';
+      } else if (fallback.availableSpots <= Math.ceil((fallback.totalSpots ?? 10) * 0.25)) {
+        fallback.status = 'FILLING_FAST';
+      } else {
+        fallback.status = 'AVAILABLE';
+      }
+    }
+
+    try {
+      const current = await prisma.parkingSpot.findUnique({ where: { id: spotId } });
+      if (current) {
+        const available = Math.max(0, current.availableSpots - 1);
+        let status: 'AVAILABLE' | 'FILLING_FAST' | 'FULL' = 'AVAILABLE';
+        if (available === 0) {
+          status = 'FULL';
+        } else if (available <= Math.ceil(current.totalSpots * 0.25)) {
+          status = 'FILLING_FAST';
+        }
+        await prisma.parkingSpot.update({
+          where: { id: spotId },
+          data: { availableSpots: available, status },
+        });
+        return available;
+      }
+    } catch (_) {}
+
+    return newAvailable;
+  }
+
+  static async incrementAvailableSpots(spotId: string): Promise<number> {
+    const fallback = fallbackSpots.find((s) => s.id === spotId);
+    let newAvailable = 0;
+    if (fallback) {
+      fallback.availableSpots = Math.min(fallback.totalSpots ?? 100, (fallback.availableSpots ?? 0) + 1);
+      newAvailable = fallback.availableSpots;
+      if (fallback.availableSpots === 0) {
+        fallback.status = 'FULL';
+      } else if (fallback.availableSpots <= Math.ceil((fallback.totalSpots ?? 10) * 0.25)) {
+        fallback.status = 'FILLING_FAST';
+      } else {
+        fallback.status = 'AVAILABLE';
+      }
+    }
+
+    try {
+      const current = await prisma.parkingSpot.findUnique({ where: { id: spotId } });
+      if (current) {
+        const available = Math.min(current.totalSpots, current.availableSpots + 1);
+        let status: 'AVAILABLE' | 'FILLING_FAST' | 'FULL' = 'AVAILABLE';
+        if (available === 0) {
+          status = 'FULL';
+        } else if (available <= Math.ceil(current.totalSpots * 0.25)) {
+          status = 'FILLING_FAST';
+        }
+        await prisma.parkingSpot.update({
+          where: { id: spotId },
+          data: { availableSpots: available, status },
+        });
+        return available;
+      }
+    } catch (_) {}
+
+    return newAvailable;
+  }
 }
+

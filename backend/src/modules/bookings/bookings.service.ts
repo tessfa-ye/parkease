@@ -121,6 +121,9 @@ export class BookingsService {
     // Save into in-memory fallback list immediately
     fallbackBookings.unshift(fallbackBooking);
 
+    // Decrement available slots on the booked parking spot
+    await SpotsService.decrementAvailableSpots(data.spotId);
+
     try {
       const booking = await prisma.booking.create({
         data: {
@@ -146,6 +149,8 @@ export class BookingsService {
   }
 
   static async getUserBookings(userId: string) {
+    await BookingsService.syncExpiredBookings();
+
     try {
       const bookings = await prisma.booking.findMany({
         where: { userId },
@@ -179,17 +184,52 @@ export class BookingsService {
     return fallback;
   }
 
-  static async cancelBooking(bookingId: string, userId: string) {
+  static async syncExpiredBookings() {
+    const now = new Date();
+    for (const b of fallbackBookings) {
+      if ((b.status === 'ACTIVE' || b.status === 'CONFIRMED') && new Date(b.endTime) < now) {
+        b.status = 'COMPLETED';
+        await SpotsService.incrementAvailableSpots(b.spotId);
+      }
+    }
     try {
-      await prisma.booking.update({
-        where: { id: bookingId },
-        data: { status: 'CANCELLED' },
+      const expired = await prisma.booking.findMany({
+        where: {
+          status: { in: ['CONFIRMED', 'ACTIVE'] },
+          endTime: { lt: now },
+        },
       });
+      for (const eb of expired) {
+        await prisma.booking.update({
+          where: { id: eb.id },
+          data: { status: 'COMPLETED' },
+        });
+        await SpotsService.incrementAvailableSpots(eb.spotId);
+      }
     } catch (_) {}
+  }
 
+  static async cancelBooking(bookingId: string, userId: string) {
+    let spotId = '';
     const index = fallbackBookings.findIndex((b) => b.id === bookingId);
     if (index >= 0) {
       fallbackBookings[index].status = 'CANCELLED';
+      spotId = fallbackBookings[index].spotId;
+    }
+
+    try {
+      const updated = await prisma.booking.update({
+        where: { id: bookingId },
+        data: { status: 'CANCELLED' },
+      });
+      if (updated.spotId) spotId = updated.spotId;
+    } catch (_) {}
+
+    if (spotId) {
+      await SpotsService.incrementAvailableSpots(spotId);
+    }
+
+    if (index >= 0) {
       return fallbackBookings[index];
     }
     return { id: bookingId, status: 'CANCELLED' };
