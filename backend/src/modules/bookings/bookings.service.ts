@@ -234,4 +234,95 @@ export class BookingsService {
     }
     return { id: bookingId, status: 'CANCELLED' };
   }
+
+  static async extendBooking(bookingId: string, additionalHours: number, additionalAmount: number) {
+    let updatedBooking: any = null;
+    const index = fallbackBookings.findIndex((b) => b.id === bookingId);
+    if (index >= 0) {
+      const current = fallbackBookings[index];
+      const newEndTime = new Date(new Date(current.endTime).getTime() + additionalHours * 60 * 60 * 1000);
+      current.endTime = newEndTime;
+      current.durationHours = (current.durationHours || 1) + additionalHours;
+      current.totalAmount = (current.totalAmount || 0) + additionalAmount;
+      updatedBooking = current;
+    }
+
+    try {
+      const current = await prisma.booking.findUnique({ where: { id: bookingId } });
+      if (current) {
+        const newEndTime = new Date(new Date(current.endTime).getTime() + additionalHours * 60 * 60 * 1000);
+        updatedBooking = await prisma.booking.update({
+          where: { id: bookingId },
+          data: {
+            endTime: newEndTime,
+            durationHours: current.durationHours + additionalHours,
+            totalAmount: current.totalAmount + additionalAmount,
+          },
+          include: { spot: true, payment: true },
+        });
+      }
+    } catch (_) {}
+
+    return updatedBooking || { id: bookingId, additionalHours, additionalAmount };
+  }
+
+  static async getBookingByPass(passCode: string) {
+    try {
+      const booking = await prisma.booking.findFirst({
+        where: {
+          OR: [{ qrCodeData: passCode }, { id: passCode }],
+        },
+        include: { spot: true, user: true },
+      });
+      if (booking) return booking;
+    } catch (_) {}
+
+    const fallback = fallbackBookings.find((b) => b.qrCodeData === passCode || b.id === passCode);
+    if (fallback) return fallback;
+
+    throw new Error('Pass code not recognized');
+  }
+
+  static async checkInBooking(bookingId: string) {
+    const index = fallbackBookings.findIndex((b) => b.id === bookingId || b.qrCodeData === bookingId);
+    if (index >= 0) {
+      fallbackBookings[index].status = 'ACTIVE';
+      fallbackBookings[index].checkedInAt = new Date();
+      return fallbackBookings[index];
+    }
+    try {
+      const updated = await prisma.booking.update({
+        where: { id: bookingId },
+        data: { status: 'ACTIVE' },
+        include: { spot: true },
+      });
+      return updated;
+    } catch (_) {}
+    return { id: bookingId, status: 'ACTIVE' };
+  }
+
+  static async checkOutBooking(bookingId: string) {
+    let spotId = '';
+    const index = fallbackBookings.findIndex((b) => b.id === bookingId || b.qrCodeData === bookingId);
+    if (index >= 0) {
+      fallbackBookings[index].status = 'COMPLETED';
+      fallbackBookings[index].checkedOutAt = new Date();
+      spotId = fallbackBookings[index].spotId;
+    }
+    try {
+      const updated = await prisma.booking.update({
+        where: { id: bookingId },
+        data: { status: 'COMPLETED' },
+        include: { spot: true },
+      });
+      if (updated.spotId) spotId = updated.spotId;
+    } catch (_) {}
+
+    if (spotId) {
+      await SpotsService.incrementAvailableSpots(spotId);
+    }
+
+    if (index >= 0) return fallbackBookings[index];
+    return { id: bookingId, status: 'COMPLETED' };
+  }
 }

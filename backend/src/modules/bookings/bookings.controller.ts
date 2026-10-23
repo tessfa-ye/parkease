@@ -76,4 +76,64 @@ export class BookingsController {
       next(error);
     }
   }
+
+  static async extendBooking(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      const { additionalHours = 1, additionalAmount = 0 } = req.body;
+      const updated = await BookingsService.extendBooking(id, Number(additionalHours), Number(additionalAmount));
+
+      res.status(200).json({
+        success: true,
+        message: `Booking extended by ${additionalHours} hour(s)`,
+        data: updated,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async getBookingByPass(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { passCode } = req.params;
+      const booking = await BookingsService.getBookingByPass(passCode);
+
+      res.status(200).json({
+        success: true,
+        data: booking,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async checkInBooking(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      const updated = await BookingsService.checkInBooking(id);
+
+      res.status(200).json({
+        success: true,
+        message: 'Vehicle checked in successfully',
+        data: updated,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async checkOutBooking(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      const updated = await BookingsService.checkOutBooking(id);
+
+      res.status(200).json({
+        success: true,
+        message: 'Vehicle checked out and slot released',
+        data: updated,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }

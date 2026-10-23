@@ -90,14 +90,16 @@ class Booking {
     BookingStatus? status,
     DateTime? endTime,
     String? txRef,
+    int? durationHours,
+    double? totalPriceETB,
   }) {
     return Booking(
       id: id,
       spot: spot,
       startTime: startTime,
       endTime: endTime ?? this.endTime,
-      durationHours: durationHours,
-      totalPriceETB: totalPriceETB,
+      durationHours: durationHours ?? this.durationHours,
+      totalPriceETB: totalPriceETB ?? this.totalPriceETB,
       slotNumber: slotNumber,
       qrCodeData: qrCodeData,
       vehiclePlate: vehiclePlate,

@@ -249,6 +249,80 @@ class ApiService {
     return null;
   }
 
+  /// Extends an active parking booking by additional hours
+  static Future<Map<String, dynamic>?> extendBooking({
+    required String bookingId,
+    required int additionalHours,
+    required double additionalAmount,
+  }) async {
+    try {
+      final response = await http
+          .patch(
+            Uri.parse('${ApiConfig.baseUrl}/bookings/$bookingId/extend'),
+            headers: _getHeaders(),
+            body: jsonEncode({
+              'additionalHours': additionalHours,
+              'additionalAmount': additionalAmount,
+            }),
+          )
+          .timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['data'];
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Looks up a driver's QR pass for attendant verification
+  static Future<Map<String, dynamic>?> lookupPass(String passCode) async {
+    try {
+      final response = await http
+          .get(
+            Uri.parse('${ApiConfig.baseUrl}/bookings/pass/$passCode'),
+            headers: _getHeaders(),
+          )
+          .timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['data'];
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Attendant action: validates check-in for a vehicle
+  static Future<bool> checkInBooking(String bookingId) async {
+    try {
+      final response = await http
+          .patch(
+            Uri.parse('${ApiConfig.baseUrl}/bookings/$bookingId/checkin'),
+            headers: _getHeaders(),
+          )
+          .timeout(const Duration(seconds: 5));
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Attendant action: marks vehicle checkout and frees the parking slot
+  static Future<bool> checkOutBooking(String bookingId) async {
+    try {
+      final response = await http
+          .patch(
+            Uri.parse('${ApiConfig.baseUrl}/bookings/$bookingId/checkout'),
+            headers: _getHeaders(),
+          )
+          .timeout(const Duration(seconds: 5));
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Fetches Host Dashboard stats and listed spaces
   static Future<Map<String, dynamic>?> getHostDashboard() async {
     try {

@@ -88,6 +88,22 @@ class BookingStore extends ChangeNotifier {
     }
   }
 
+  /// Extend an active booking with more time and updated cost
+  void extendBooking(String bookingId, int additionalHours, double additionalAmount) {
+    final idx = _bookings.indexWhere((b) => b.id == bookingId);
+    if (idx >= 0) {
+      final current = _bookings[idx];
+      final newEndTime = current.endTime.add(Duration(hours: additionalHours));
+      _bookings[idx] = current.copyWith(
+        endTime: newEndTime,
+        durationHours: current.durationHours + additionalHours,
+        totalPriceETB: current.totalPriceETB + additionalAmount,
+      );
+      _saveToDisk();
+      notifyListeners();
+    }
+  }
+
   /// Synchronize with bookings fetched from backend API
   void mergeFromApi(List<Booking> apiBookings) {
     bool changed = false;

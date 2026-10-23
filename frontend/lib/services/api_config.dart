@@ -20,8 +20,10 @@ class ApiConfig {
 
     try {
       if (Platform.isAndroid) {
-        // 10.0.2.2 points to localhost from Android Emulator
-        return 'http://10.0.2.2:5000/api';
+        // Physical device connected via USB uses ADB reverse port forwarding (adb reverse tcp:5000 tcp:5000).
+        // This allows `localhost:5000` on the phone to connect directly to the PC backend!
+        // For Wi-Fi debugging without USB, set _customBaseUrl or use LAN IP e.g. "http://172.20.47.19:5000/api".
+        return 'http://localhost:5000/api';
       }
     } catch (_) {}
 
