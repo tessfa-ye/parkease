@@ -88,6 +88,7 @@ class Booking {
 
   Booking copyWith({
     BookingStatus? status,
+    DateTime? startTime,
     DateTime? endTime,
     String? txRef,
     int? durationHours,
@@ -96,7 +97,7 @@ class Booking {
     return Booking(
       id: id,
       spot: spot,
-      startTime: startTime,
+      startTime: startTime ?? this.startTime,
       endTime: endTime ?? this.endTime,
       durationHours: durationHours ?? this.durationHours,
       totalPriceETB: totalPriceETB ?? this.totalPriceETB,

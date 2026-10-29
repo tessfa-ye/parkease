@@ -7,6 +7,7 @@ import { spotsRoutes } from './modules/spots/spots.routes';
 import { bookingsRoutes } from './modules/bookings/bookings.routes';
 import { paymentsRoutes } from './modules/payments/payments.routes';
 import { hostsRoutes } from './modules/hosts/hosts.routes';
+import { adminRoutes } from './modules/admin/admin.routes';
 
 export const createApp = (): express.Application => {
   const app = express();
@@ -37,6 +38,7 @@ export const createApp = (): express.Application => {
   app.use('/api/bookings', bookingsRoutes);
   app.use('/api/payments', paymentsRoutes);
   app.use('/api/hosts', hostsRoutes);
+  app.use('/api/admin', adminRoutes);
 
   // Global Error Handler
   app.use(errorHandler);

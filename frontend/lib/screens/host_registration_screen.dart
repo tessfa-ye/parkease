@@ -154,9 +154,10 @@ class _HostRegistrationScreenState extends State<HostRegistrationScreen> {
       Column(
         children: [
           DropdownButtonFormField<String>(
+            isExpanded: true,
             initialValue: _selectedCountry,
             decoration: _inputDecoration('Country'),
-            items: _countries.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+            items: _countries.map((c) => DropdownMenuItem(value: c, child: Text(c, overflow: TextOverflow.ellipsis))).toList(),
             onChanged: (v) {
               if (v != null) setState(() => _selectedCountry = v);
             },

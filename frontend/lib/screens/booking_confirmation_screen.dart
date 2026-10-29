@@ -32,6 +32,76 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
   bool _isProcessing = false;
   String _processingLabel = 'Opening Chapa Checkout...';
 
+  DateTime _startTime = DateTime.now();
+  int _arrivalOffsetMinutes = 0; // 0 for "Now", 15, 30, or -1 for Custom
+
+  DateTime get _effectiveEndTime => _startTime.add(Duration(hours: _durationHours));
+
+  String _formatDateTime(DateTime dt) {
+    final now = DateTime.now();
+    final isToday = dt.year == now.year && dt.month == now.month && dt.day == now.day;
+    final timeStr = TimeOfDay.fromDateTime(dt).format(context);
+    return isToday ? 'Today, $timeStr' : '${dt.month}/${dt.day}, $timeStr';
+  }
+
+  void _setArrivalOffset(int minutes) {
+    setState(() {
+      _arrivalOffsetMinutes = minutes;
+      if (minutes == 0) {
+        _startTime = DateTime.now();
+      } else {
+        _startTime = DateTime.now().add(Duration(minutes: minutes));
+      }
+    });
+  }
+
+  Future<void> _pickCustomStartTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_startTime),
+      helpText: 'Estimated Arrival Time',
+    );
+    if (picked != null) {
+      final nowDt = DateTime.now();
+      var selectedDt = DateTime(nowDt.year, nowDt.month, nowDt.day, picked.hour, picked.minute);
+      if (selectedDt.isBefore(nowDt.subtract(const Duration(minutes: 5)))) {
+        selectedDt = selectedDt.add(const Duration(days: 1));
+      }
+      setState(() {
+        _arrivalOffsetMinutes = -1;
+        _startTime = selectedDt;
+      });
+    }
+  }
+
+  Widget _buildArrivalChip({required String label, required int offset}) {
+    final isSel = _arrivalOffsetMinutes == offset;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => _setArrivalOffset(offset),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: isSel ? AppColors.primary : Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isSel ? AppColors.primary : Colors.grey.shade300,
+            ),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: isSel ? Colors.white : AppColors.textPrimary,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   // Lifecycle listener to detect when user returns from browser
   AppLifecycleListener? _lifecycleListener;
   bool _chapaLaunched = false;
@@ -213,7 +283,7 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
       _processingLabel = 'Creating your reservation…';
     });
 
-    final startTime = DateTime.now();
+    final startTime = _startTime;
 
     // 1. Create booking on backend (status stays PENDING until payment verified)
     final booking = await ApiService.createBooking(
@@ -361,9 +431,68 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
             const SizedBox(height: 24),
 
             // Reservation Time
-            const Text(
-              'Reservation Details',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Reservation Details',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                ),
+                TextButton.icon(
+                  onPressed: _pickCustomStartTime,
+                  icon: const Icon(Icons.schedule, size: 16),
+                  label: const Text('Custom Time', style: TextStyle(fontSize: 12)),
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            // Quick arrival chips: Now, +15m, +30m, Pick Time
+            Row(
+              children: [
+                _buildArrivalChip(label: 'Now', offset: 0),
+                const SizedBox(width: 8),
+                _buildArrivalChip(label: '+15 min', offset: 15),
+                const SizedBox(width: 8),
+                _buildArrivalChip(label: '+30 min', offset: 30),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: InkWell(
+                    onTap: _pickCustomStartTime,
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(
+                        color: _arrivalOffsetMinutes == -1
+                            ? AppColors.primary
+                            : Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: _arrivalOffsetMinutes == -1
+                              ? AppColors.primary
+                              : Colors.grey.shade300,
+                        ),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        _arrivalOffsetMinutes == -1
+                            ? TimeOfDay.fromDateTime(_startTime).format(context)
+                            : 'Pick Time',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: _arrivalOffsetMinutes == -1
+                              ? Colors.white
+                              : AppColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 12),
             Card(
@@ -371,7 +500,7 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   children: [
-                    _buildRowDetail('Start Time', 'Today, ${TimeOfDay.now().format(context)}'),
+                    _buildRowDetail('Start Time (Arrival)', _formatDateTime(_startTime)),
                     const Divider(height: 20),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -419,7 +548,7 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
                     const Divider(height: 20),
                     _buildRowDetail(
                       'End Time',
-                      'Today, ${TimeOfDay.fromDateTime(DateTime.now().add(Duration(hours: _durationHours))).format(context)}',
+                      _formatDateTime(_effectiveEndTime),
                     ),
                   ],
                 ),
@@ -435,12 +564,19 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
+              isExpanded: true,
               initialValue: vehicles.contains(_selectedVehicle) ? _selectedVehicle : vehicles.first,
               decoration: const InputDecoration(
                 prefixIcon: Icon(Icons.directions_car_outlined),
               ),
               items: vehicles.map((v) {
-                return DropdownMenuItem(value: v, child: Text(v));
+                return DropdownMenuItem(
+                  value: v,
+                  child: Text(
+                    v,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                );
               }).toList(),
               onChanged: (val) {
                 if (val != null) setState(() => _selectedVehicle = val);

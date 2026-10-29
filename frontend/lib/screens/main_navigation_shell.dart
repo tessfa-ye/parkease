@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'service_screen.dart';
 import '../theme/app_theme.dart';
 import '../l10n/app_strings.dart';
 import 'home_map_screen.dart';
@@ -25,6 +26,7 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
     _screens = [
       const HomeMapScreen(),
       const TripHistoryScreen(),
+      const ServiceScreen(),
       const ProfileScreen(),
     ];
   }
@@ -69,6 +71,11 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
               icon: const Icon(Icons.receipt_long_outlined),
               activeIcon: const Icon(Icons.receipt_long),
               label: AppStrings.bookings,
+            ),
+            BottomNavigationBarItem(
+              icon: const Icon(Icons.miscellaneous_services),
+              activeIcon: const Icon(Icons.miscellaneous_services),
+              label: AppStrings.services,
             ),
             BottomNavigationBarItem(
               icon: const Icon(Icons.person_outline),

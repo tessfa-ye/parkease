@@ -40,6 +40,7 @@ class AppStrings {
   static String get exploreMap => _isAm ? 'ካርታ ፈልግ' : 'Explore Map';
   static String get bookings => _isAm ? 'የተያዙ ቦታዎች' : 'Bookings';
   static String get profile => _isAm ? 'መገለጫ' : 'Profile';
+  static String get services => _isAm ? 'አገልግሎቶች' : 'Services';
 
   // Onboarding
   static String get onboardingTitle1 => _isAm ? 'በአዲስ አበባ እና በዓለም ዙሪያ ፓርኪንግ ያግኙ' : 'Find Parking in Addis & Worldwide';

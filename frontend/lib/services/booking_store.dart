@@ -104,6 +104,22 @@ class BookingStore extends ChangeNotifier {
     }
   }
 
+  /// Start a scheduled booking immediately when user arrives ahead of schedule
+  void startBookingNow(String bookingId) {
+    final idx = _bookings.indexWhere((b) => b.id == bookingId);
+    if (idx >= 0) {
+      final current = _bookings[idx];
+      final now = DateTime.now();
+      final newEndTime = now.add(Duration(hours: current.durationHours));
+      _bookings[idx] = current.copyWith(
+        startTime: now,
+        endTime: newEndTime,
+      );
+      _saveToDisk();
+      notifyListeners();
+    }
+  }
+
   /// Synchronize with bookings fetched from backend API
   void mergeFromApi(List<Booking> apiBookings) {
     bool changed = false;
@@ -132,4 +148,11 @@ class BookingStore extends ChangeNotifier {
       await prefs.setString(_keyBookings, jsonEncode(jsonList));
     } catch (_) {}
   }
+  /// Return active bookings as a Future for UI consumption
+  Future<List<Booking>> getActiveBookings() async {
+    // Ensure the store is initialized (loads from SharedPreferences)
+    await init();
+    return activeBookings;
+  }
 }
+

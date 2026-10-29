@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { prisma } from '../../config/db';
 import { SpotsService } from '../spots/spots.service';
+import { TransactionService } from '../../services/transaction.service';
 
 export interface CreateBookingDto {
   userId: string;
@@ -121,12 +122,10 @@ export class BookingsService {
     // Save into in-memory fallback list immediately
     fallbackBookings.unshift(fallbackBooking);
 
-    // Decrement available slots on the booked parking spot
-    await SpotsService.decrementAvailableSpots(data.spotId);
-
     try {
-      const booking = await prisma.booking.create({
-        data: {
+      // Use atomic transaction to ensure booking + spot decrement are both successful or both fail
+      const { booking } = await TransactionService.createBookingWithDecrement(
+        {
           id: bookingId,
           userId: data.userId,
           spotId: data.spotId,
@@ -138,12 +137,12 @@ export class BookingsService {
           status: 'CONFIRMED',
           qrCodeData,
         },
-        include: {
-          spot: true,
-        },
-      });
+        data.spotId
+      );
       return booking;
-    } catch (err) {
+    } catch (err: any) {
+      console.error('❌ Atomic booking creation failed:', err.message);
+      // Fallback to in-memory booking if DB fails
       return fallbackBooking;
     }
   }
@@ -206,7 +205,7 @@ export class BookingsService {
         });
         await SpotsService.incrementAvailableSpots(eb.spotId);
       }
-    } catch (_) {}
+    } catch (_) { }
   }
 
   static async cancelBooking(bookingId: string, userId: string) {
@@ -218,21 +217,20 @@ export class BookingsService {
     }
 
     try {
-      const updated = await prisma.booking.update({
-        where: { id: bookingId },
-        data: { status: 'CANCELLED' },
-      });
-      if (updated.spotId) spotId = updated.spotId;
-    } catch (_) {}
-
-    if (spotId) {
-      await SpotsService.incrementAvailableSpots(spotId);
+      // Use atomic transaction to ensure booking cancellation + spot increment are both successful
+      const { booking } = await TransactionService.cancelBookingWithIncrement(bookingId, userId);
+      return booking;
+    } catch (err: any) {
+      console.error('❌ Atomic cancellation failed:', err.message);
+      // Fallback to manual increment
+      if (spotId) {
+        await SpotsService.incrementAvailableSpots(spotId);
+      }
+      if (index >= 0) {
+        return fallbackBookings[index];
+      }
+      return { id: bookingId, status: 'CANCELLED' };
     }
-
-    if (index >= 0) {
-      return fallbackBookings[index];
-    }
-    return { id: bookingId, status: 'CANCELLED' };
   }
 
   static async extendBooking(bookingId: string, additionalHours: number, additionalAmount: number) {
@@ -261,7 +259,7 @@ export class BookingsService {
           include: { spot: true, payment: true },
         });
       }
-    } catch (_) {}
+    } catch (_) { }
 
     return updatedBooking || { id: bookingId, additionalHours, additionalAmount };
   }
@@ -275,7 +273,7 @@ export class BookingsService {
         include: { spot: true, user: true },
       });
       if (booking) return booking;
-    } catch (_) {}
+    } catch (_) { }
 
     const fallback = fallbackBookings.find((b) => b.qrCodeData === passCode || b.id === passCode);
     if (fallback) return fallback;
@@ -297,7 +295,7 @@ export class BookingsService {
         include: { spot: true },
       });
       return updated;
-    } catch (_) {}
+    } catch (_) { }
     return { id: bookingId, status: 'ACTIVE' };
   }
 
@@ -310,19 +308,17 @@ export class BookingsService {
       spotId = fallbackBookings[index].spotId;
     }
     try {
-      const updated = await prisma.booking.update({
-        where: { id: bookingId },
-        data: { status: 'COMPLETED' },
-        include: { spot: true },
-      });
-      if (updated.spotId) spotId = updated.spotId;
-    } catch (_) {}
-
-    if (spotId) {
-      await SpotsService.incrementAvailableSpots(spotId);
+      // Use atomic transaction to ensure booking completion + spot increment are both successful
+      const { booking } = await TransactionService.completeBookingWithIncrement(bookingId);
+      return booking;
+    } catch (err: any) {
+      console.error('❌ Atomic checkout failed:', err.message);
+      // Fallback to manual increment
+      if (spotId) {
+        await SpotsService.incrementAvailableSpots(spotId);
+      }
+      if (index >= 0) return fallbackBookings[index];
+      return { id: bookingId, status: 'COMPLETED' };
     }
-
-    if (index >= 0) return fallbackBookings[index];
-    return { id: bookingId, status: 'COMPLETED' };
   }
 }

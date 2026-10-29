@@ -5,6 +5,7 @@ import '../theme/app_theme.dart';
 import '../services/booking_store.dart';
 import '../services/api_service.dart';
 import '../services/map_launcher_service.dart';
+import '../services/host_space_store.dart';
 import '../screens/payment_screen.dart';
 
 class ActiveParkingSessionCard extends StatefulWidget {
@@ -17,11 +18,15 @@ class ActiveParkingSessionCard extends StatefulWidget {
 
 class _ActiveParkingSessionCardState extends State<ActiveParkingSessionCard> {
   Timer? _timer;
+  late Booking _booking;
   late Duration _remaining;
+  bool _isUpcoming = false;
+  Duration _remainingUntilStart = Duration.zero;
 
   @override
   void initState() {
     super.initState();
+    _booking = widget.booking;
     _calculateRemaining();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) {
@@ -35,7 +40,9 @@ class _ActiveParkingSessionCardState extends State<ActiveParkingSessionCard> {
   @override
   void didUpdateWidget(covariant ActiveParkingSessionCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.booking.endTime != widget.booking.endTime) {
+    if (oldWidget.booking.endTime != widget.booking.endTime ||
+        oldWidget.booking.startTime != widget.booking.startTime) {
+      _booking = widget.booking;
       _calculateRemaining();
     }
   }
@@ -47,8 +54,16 @@ class _ActiveParkingSessionCardState extends State<ActiveParkingSessionCard> {
   }
 
   void _calculateRemaining() {
-    final diff = widget.booking.endTime.difference(DateTime.now());
-    _remaining = diff.isNegative ? Duration.zero : diff;
+    final now = DateTime.now();
+    _isUpcoming = now.isBefore(_booking.startTime);
+    if (_isUpcoming) {
+      _remainingUntilStart = _booking.startTime.difference(now);
+      _remaining = _booking.endTime.difference(_booking.startTime);
+    } else {
+      _remainingUntilStart = Duration.zero;
+      final diff = _booking.endTime.difference(now);
+      _remaining = diff.isNegative ? Duration.zero : diff;
+    }
   }
 
   String _formatDuration(Duration d) {
@@ -59,9 +74,72 @@ class _ActiveParkingSessionCardState extends State<ActiveParkingSessionCard> {
   }
 
   Color get _statusColor {
+    if (_isUpcoming) return const Color(0xFF6366F1); // Indigo for Scheduled
     if (_remaining == Duration.zero) return const Color(0xFFEF4444); // Expired
     if (_remaining.inMinutes <= 15) return const Color(0xFFF59E0B); // Amber warning
     return const Color(0xFF10B981); // Healthy green
+  }
+
+  void _openPassScreen() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PaymentScreen(
+          spot: _booking.spot,
+          durationHours: _booking.durationHours,
+          totalPriceETB: _booking.totalPriceETB,
+          vehiclePlate: _booking.vehiclePlate,
+          bookingId: _booking.id,
+          qrCodeData: _booking.qrCodeData,
+          txRef: _booking.txRef,
+        ),
+      ),
+    );
+  }
+
+  void _confirmCheckOut(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Row(
+          children: const [
+            Icon(Icons.logout_rounded, color: Color(0xFF10B981)),
+            SizedBox(width: 10),
+            Text('Check Out of Spot?'),
+          ],
+        ),
+        content: Text(
+          'Are you leaving ${_booking.spot.title}? This will complete your parking session and free the spot for other drivers.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF10B981),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              BookingStore.instance.completeBooking(_booking.id);
+              HostSpaceStore.instance.releaseBooking(_booking.spot.id);
+              ApiService.checkOutBooking(_booking.id);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  backgroundColor: Color(0xFF10B981),
+                  content: Text('👋 Session completed! Saved to your Bookings history.'),
+                ),
+              );
+            },
+            child: const Text('Confirm Check Out'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showExtendModal(BuildContext context) {
@@ -219,7 +297,7 @@ class _ActiveParkingSessionCardState extends State<ActiveParkingSessionCard> {
     final isExpired = _remaining == Duration.zero;
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: const EdgeInsets.symmetric(vertical: 4),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -235,6 +313,7 @@ class _ActiveParkingSessionCardState extends State<ActiveParkingSessionCard> {
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
@@ -252,9 +331,39 @@ class _ActiveParkingSessionCardState extends State<ActiveParkingSessionCard> {
                   '${widget.booking.spot.title} • ${widget.booking.slotNumber}',
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                   maxLines: 1,
-                  overflow: TextEditingFormat.ellipsis,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
+              const SizedBox(width: 8),
+              // Compact Digital QR Pass button
+              InkWell(
+                onTap: _openPassScreen,
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Icon(Icons.qr_code_2, size: 14, color: AppColors.primary),
+                      SizedBox(width: 3),
+                      Text(
+                        'Pass',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
@@ -262,7 +371,7 @@ class _ActiveParkingSessionCardState extends State<ActiveParkingSessionCard> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  isExpired ? 'EXPIRED' : 'ACTIVE',
+                  _isUpcoming ? 'SCHEDULED' : (isExpired ? 'EXPIRED' : 'ACTIVE'),
                   style: TextStyle(
                     color: _statusColor,
                     fontSize: 10,
@@ -272,94 +381,174 @@ class _ActiveParkingSessionCardState extends State<ActiveParkingSessionCard> {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          if (widget.booking.vehiclePlate.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                const Icon(Icons.directions_car_outlined, size: 14, color: AppColors.textSecondary),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    widget.booking.vehiclePlate,
+                    style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: _statusColor.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  _isUpcoming
+                      ? Icons.schedule
+                      : (isExpired ? Icons.timer_off_outlined : Icons.timer_outlined),
+                  size: 16,
+                  color: _statusColor,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  _isUpcoming
+                      ? 'Starts in ${_formatDuration(_remainingUntilStart)}'
+                      : (isExpired ? 'Parking Time Expired' : _formatDuration(_remaining)),
+                  style: TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: _statusColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Exactly 2 primary action buttons per state:
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Icon(Icons.timer_outlined, size: 18, color: _statusColor),
-                  const SizedBox(width: 6),
-                  Text(
-                    isExpired ? 'Parking Time Expired' : _formatDuration(_remaining),
-                    style: TextStyle(
-                      fontFamily: 'monospace',
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: _statusColor,
+              if (_isUpcoming) ...[
+                // 1. Directions to spot
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => MapLauncherService.showDirectionsModal(
+                      context,
+                      latitude: widget.booking.spot.latitude,
+                      longitude: widget.booking.spot.longitude,
+                      title: widget.booking.spot.title,
+                      address: widget.booking.spot.address,
+                    ),
+                    icon: const Icon(Icons.navigation_outlined, size: 16, color: Color(0xFF10B981)),
+                    label: const Text('Directions', style: TextStyle(fontSize: 12, color: Color(0xFF10B981))),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      side: const BorderSide(color: Color(0xFF10B981)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                   ),
-                ],
-              ),
-              Text(
-                widget.booking.vehiclePlate,
-                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              // Pass button
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => PaymentScreen(
-                          spot: widget.booking.spot,
-                          durationHours: widget.booking.durationHours,
-                          totalPriceETB: widget.booking.totalPriceETB,
-                          vehiclePlate: widget.booking.vehiclePlate,
-                          bookingId: widget.booking.id,
-                          qrCodeData: widget.booking.qrCodeData,
-                          txRef: widget.booking.txRef,
+                ),
+                const SizedBox(width: 10),
+                // 2. Start session early
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      final now = DateTime.now();
+                      setState(() {
+                        _booking = _booking.copyWith(
+                          startTime: now,
+                          endTime: now.add(Duration(hours: _booking.durationHours)),
+                        );
+                        _calculateRemaining();
+                      });
+                      BookingStore.instance.startBookingNow(_booking.id);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          backgroundColor: Color(0xFF10B981),
+                          content: Text('🚗 Parking session started! Your timer is now active.'),
                         ),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.qr_code, size: 16),
-                  label: const Text('Pass', style: TextStyle(fontSize: 12)),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      );
+                    },
+                    icon: const Icon(Icons.play_arrow, size: 16),
+                    label: const Text('Start Now', style: TextStyle(fontSize: 12)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF10B981),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              // Find car directions
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => MapLauncherService.showDirectionsModal(
-                    context,
-                    latitude: widget.booking.spot.latitude,
-                    longitude: widget.booking.spot.longitude,
-                    title: widget.booking.spot.title,
-                    address: widget.booking.spot.address,
-                  ),
-                  icon: const Icon(Icons.navigation_outlined, size: 16, color: Color(0xFF10B981)),
-                  label: const Text('Find Car', style: TextStyle(fontSize: 12, color: Color(0xFF10B981))),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    side: const BorderSide(color: Color(0xFF10B981)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ] else if (isExpired) ...[
+                // 1. Extend Time
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _showExtendModal(context),
+                    icon: const Icon(Icons.more_time, size: 16, color: AppColors.primary),
+                    label: const Text('Extend Time', style: TextStyle(fontSize: 12, color: AppColors.primary)),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      side: const BorderSide(color: AppColors.primary),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              // Extend time
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () => _showExtendModal(context),
-                  icon: const Icon(Icons.add, size: 16),
-                  label: const Text('Extend', style: TextStyle(fontSize: 12)),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                const SizedBox(width: 10),
+                // 2. Check out & leave
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => _confirmCheckOut(context),
+                    icon: const Icon(Icons.check_circle_outline, size: 16),
+                    label: const Text('Check Out', style: TextStyle(fontSize: 12)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF10B981),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
                   ),
                 ),
-              ),
+              ] else ...[
+                // ACTIVE:
+                // 1. Find Car (walking directions)
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => MapLauncherService.showDirectionsModal(
+                      context,
+                      latitude: widget.booking.spot.latitude,
+                      longitude: widget.booking.spot.longitude,
+                      title: widget.booking.spot.title,
+                      address: widget.booking.spot.address,
+                    ),
+                    icon: const Icon(Icons.directions_walk, size: 16, color: Color(0xFF10B981)),
+                    label: const Text('Find Car', style: TextStyle(fontSize: 12, color: Color(0xFF10B981))),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      side: const BorderSide(color: Color(0xFF10B981)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                // 2. Extend Time
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => _showExtendModal(context),
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('Extend', style: TextStyle(fontSize: 12)),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ],
