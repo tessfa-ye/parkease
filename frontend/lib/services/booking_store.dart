@@ -33,8 +33,18 @@ class BookingStore extends ChangeNotifier {
   /// Initialize and restore stored bookings from SharedPreferences
   Future<void> init() async {
     if (_isInitialized) return;
+    await _loadFromDisk();
     _isInitialized = true;
+  }
 
+  /// Force a fresh reload from SharedPreferences (bypasses the init guard).
+  /// Use this when you need guaranteed up-to-date data, e.g. in the scanner.
+  Future<void> forceReload() async {
+    await _loadFromDisk();
+    _isInitialized = true;
+  }
+
+  Future<void> _loadFromDisk() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final cachedJson = prefs.getString(_keyBookings);

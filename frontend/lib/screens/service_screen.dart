@@ -50,7 +50,7 @@ class ServiceScreen extends StatelessWidget {
               itemBuilder: (context, index) {
                 final booking = bookings[index];
                 return ActiveParkingSessionCard(
-                  key: ValueKey('${booking.id}_${booking.startTime.millisecondsSinceEpoch}_${booking.endTime.millisecondsSinceEpoch}'),
+                  key: ValueKey(booking.id),
                   booking: booking,
                 );
               },
