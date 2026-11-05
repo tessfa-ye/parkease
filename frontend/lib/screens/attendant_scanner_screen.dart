@@ -41,11 +41,45 @@ class _AttendantScannerScreenState extends State<AttendantScannerScreen> {
     }
   }
 
-  Future<void> _processPassCode(String passCode) async {
+  Future<void> _processPassCode(String rawCode) async {
     setState(() => _isProcessing = true);
 
     // Always reload from disk to get the latest bookings
     await BookingStore.instance.forceReload();
+
+    String passCode = rawCode.trim();
+    DateTime? embeddedEndTime;
+    String? embeddedSpot;
+    String? embeddedSlot;
+    String? embeddedPlate;
+    int? embeddedDuration;
+    double? embeddedPrice;
+
+    // Decode rich QR code payload if present
+    // Format: PARKEASE-PASS-<ID>|EXP:<epochMillis>|SPOT:<title>|SLOT:<slot>|PLATE:<plate>|DUR:<hours>|PRICE:<etb>
+    if (passCode.contains('|')) {
+      final parts = passCode.split('|');
+      passCode = parts[0].trim();
+      for (final part in parts.skip(1)) {
+        final trimmed = part.trim();
+        if (trimmed.startsWith('EXP:')) {
+          final ms = int.tryParse(trimmed.substring(4).trim());
+          if (ms != null) {
+            embeddedEndTime = DateTime.fromMillisecondsSinceEpoch(ms);
+          }
+        } else if (trimmed.startsWith('SPOT:')) {
+          embeddedSpot = trimmed.substring(5).trim();
+        } else if (trimmed.startsWith('SLOT:')) {
+          embeddedSlot = trimmed.substring(5).trim();
+        } else if (trimmed.startsWith('PLATE:')) {
+          embeddedPlate = trimmed.substring(6).trim();
+        } else if (trimmed.startsWith('DUR:')) {
+          embeddedDuration = int.tryParse(trimmed.substring(4).trim());
+        } else if (trimmed.startsWith('PRICE:')) {
+          embeddedPrice = double.tryParse(trimmed.substring(6).trim());
+        }
+      }
+    }
 
     final normalized = passCode.trim().toUpperCase();
 
@@ -108,21 +142,24 @@ class _AttendantScannerScreenState extends State<AttendantScannerScreen> {
           'qrCodeData': passCode,
         };
       } else if (_isParkEaseCode(normalized)) {
-        // 3. Fallback: genuine ParkEase code but booking not found locally/online.
-        //    Show a partial modal so the attendant can still verify manually.
+        // 3. Fallback: genuine ParkEase code (offline / cross-device)
         final extractedId = _extractBookingId(normalized);
+        final effectiveEnd = embeddedEndTime ??
+            DateTime.now().add(const Duration(hours: 24));
+        final isEmbeddedExpired = embeddedEndTime != null &&
+            DateTime.now().isAfter(embeddedEndTime);
+
         details = {
           'id': extractedId,
-          'spotTitle': 'ParkEase Parking',
+          'spotTitle': embeddedSpot ?? 'ParkEase Parking',
           'spotId': '',
-          'slotNumber': '—',
-          'vehiclePlate': 'See pass for details',
-          'durationHours': 1,
-          'totalPriceETB': 0.0,
-          // Set endTime well into the future so it is NOT treated as expired
+          'slotNumber': embeddedSlot ?? '—',
+          'vehiclePlate': embeddedPlate ?? 'See pass for details',
+          'durationHours': embeddedDuration ?? 1,
+          'totalPriceETB': embeddedPrice ?? 0.0,
           'startTime': DateTime.now().toIso8601String(),
-          'endTime': DateTime.now().add(const Duration(hours: 24)).toIso8601String(),
-          'status': 'ACTIVE',
+          'endTime': effectiveEnd.toIso8601String(),
+          'status': isEmbeddedExpired ? 'EXPIRED' : 'ACTIVE',
           'qrCodeData': passCode,
         };
       }
@@ -145,13 +182,17 @@ class _AttendantScannerScreenState extends State<AttendantScannerScreen> {
 
   void _showVerificationModal(Map<String, dynamic> b) {
     final status = b['status'] as String? ?? 'ACTIVE';
-    // Status field is the source of truth.
-    // Only use endTime as a fallback when status is NOT explicitly ACTIVE.
     final endTime = DateTime.tryParse(b['endTime'].toString());
-    final isExpired = status == 'EXPIRED' ||
-        (status != 'ACTIVE' &&
-            endTime != null &&
-            endTime.isBefore(DateTime.now()));
+    final now = DateTime.now();
+    
+    // Check if parking session has expired by status or passed endTime
+    final bool isExpired = status == 'EXPIRED' ||
+        (endTime != null &&
+            now.isAfter(endTime) &&
+            status != 'COMPLETED' &&
+            status != 'CANCELLED');
+
+    final displayStatus = isExpired ? 'EXPIRED' : status;
 
     showModalBottomSheet(
       context: context,
@@ -240,10 +281,38 @@ class _AttendantScannerScreenState extends State<AttendantScannerScreen> {
                   _infoRow('Paid Duration',
                       '${b['durationHours']} hrs (${b['totalPriceETB']} ETB)'),
                   const Divider(height: 16),
-                  _infoRow('Status', status),
+                  _infoRow('Status', displayStatus,
+                      isHighlighted: isExpired),
                 ],
               ),
             ),
+            if (isExpired) ...[
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEF4444).withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.25)),
+                ),
+                child: Row(
+                  children: const [
+                    Icon(Icons.error_outline, color: Color(0xFFEF4444), size: 20),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Parking time expired! Driver must extend time in app before entry can be verified.',
+                        style: TextStyle(
+                          color: Color(0xFFEF4444),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 24),
             Row(
               children: [
@@ -265,14 +334,23 @@ class _AttendantScannerScreenState extends State<AttendantScannerScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      _executeCheckIn(b['id']);
-                    },
-                    icon: const Icon(Icons.login, size: 18),
-                    label: const Text('Verify & Entry'),
+                    onPressed: isExpired
+                        ? null // Disabled when expired!
+                        : () {
+                            Navigator.pop(ctx);
+                            _executeCheckIn(b['id']);
+                          },
+                    icon: Icon(
+                      isExpired ? Icons.block : Icons.login,
+                      size: 18,
+                    ),
+                    label: Text(
+                      isExpired ? 'Extend Required' : 'Verify & Entry',
+                    ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF10B981),
+                      disabledBackgroundColor: Colors.grey.shade300,
+                      disabledForegroundColor: Colors.grey.shade600,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(

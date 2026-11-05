@@ -21,14 +21,45 @@ class BookingStore extends ChangeNotifier {
 
   List<Booking> get bookings => List.unmodifiable(_bookings);
 
-  List<Booking> get activeBookings =>
-      _bookings.where((b) => b.status == BookingStatus.active).toList();
+  /// Grace period after parking time expires before auto-checkout (15 minutes).
+  static const Duration gracePeriod = Duration(minutes: 15);
 
-  List<Booking> get completedBookings =>
-      _bookings.where((b) => b.status == BookingStatus.completed).toList();
+  List<Booking> get activeBookings {
+    checkAndAutoCompleteExpired(notify: false);
+    return _bookings.where((b) => b.status == BookingStatus.active).toList();
+  }
+
+  List<Booking> get completedBookings {
+    checkAndAutoCompleteExpired(notify: false);
+    return _bookings.where((b) => b.status == BookingStatus.completed).toList();
+  }
 
   List<Booking> get cancelledBookings =>
       _bookings.where((b) => b.status == BookingStatus.cancelled).toList();
+
+  /// Automatically completes any active booking that has been expired
+  /// for longer than the 15-minute grace period.
+  bool checkAndAutoCompleteExpired({bool notify = true}) {
+    final now = DateTime.now();
+    bool changed = false;
+
+    for (int i = 0; i < _bookings.length; i++) {
+      final b = _bookings[i];
+      if (b.status == BookingStatus.active) {
+        // If parking ended and grace period has also passed
+        if (now.isAfter(b.endTime.add(gracePeriod))) {
+          _bookings[i] = b.copyWith(status: BookingStatus.completed);
+          changed = true;
+        }
+      }
+    }
+
+    if (changed) {
+      _saveToDisk();
+      if (notify) notifyListeners();
+    }
+    return changed;
+  }
 
   /// Initialize and restore stored bookings from SharedPreferences
   Future<void> init() async {
@@ -78,7 +109,7 @@ class BookingStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Cancel an active booking
+  /// Cancel an active booking 
   void cancelBooking(String bookingId) {
     final idx = _bookings.indexWhere((b) => b.id == bookingId);
     if (idx >= 0) {
@@ -103,7 +134,12 @@ class BookingStore extends ChangeNotifier {
     final idx = _bookings.indexWhere((b) => b.id == bookingId);
     if (idx >= 0) {
       final current = _bookings[idx];
-      final newEndTime = current.endTime.add(Duration(hours: additionalHours));
+      final now = DateTime.now();
+      // If the booking is already expired, extend from right now!
+      // Otherwise extend from current endTime.
+      final baseTime = current.endTime.isBefore(now) ? now : current.endTime;
+      final newEndTime = baseTime.add(Duration(hours: additionalHours));
+      
       _bookings[idx] = current.copyWith(
         endTime: newEndTime,
         durationHours: current.durationHours + additionalHours,

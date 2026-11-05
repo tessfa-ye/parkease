@@ -14,6 +14,9 @@ class PaymentScreen extends StatelessWidget {
   final String? qrCodeData;
   final String? txRef;
   final String paymentMethod;
+  final DateTime? startTime;
+  final DateTime? endTime;
+  final String? slotNumber;
 
   const PaymentScreen({
     super.key,
@@ -25,12 +28,28 @@ class PaymentScreen extends StatelessWidget {
     this.qrCodeData,
     this.txRef,
     this.paymentMethod = 'Telebirr / Chapa',
+    this.startTime,
+    this.endTime,
+    this.slotNumber,
   });
 
   @override
   Widget build(BuildContext context) {
-    final passCode = qrCodeData ?? 'PARKEASE-PASS-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
-    final slotNumber = '${spot.city.split(" ").first}-Slot-${(spot.availableSpots % 25) + 1}';
+    final rawBookingId = bookingId ??
+        'BK-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+    final effectiveSlot = slotNumber ??
+        '${spot.city.split(" ").first}-Slot-${(spot.availableSpots % 25) + 1}';
+    final effectiveEndTime = endTime ??
+        (startTime ?? DateTime.now()).add(Duration(hours: durationHours));
+
+    // Clean display string for human eye under the QR code
+    final displayPassCode = qrCodeData != null && !qrCodeData!.contains('|')
+        ? qrCodeData!
+        : 'PARKEASE-PASS-$rawBookingId';
+
+    // Rich self-contained QR data payload:
+    // Format: PARKEASE-PASS-<ID>|EXP:<ms>|SPOT:<spot>|SLOT:<slot>|PLATE:<plate>|DUR:<hours>|PRICE:<etb>
+    final qrData = '$displayPassCode|EXP:${effectiveEndTime.millisecondsSinceEpoch}|SPOT:${spot.title}|SLOT:$effectiveSlot|PLATE:$vehiclePlate|DUR:$durationHours|PRICE:${totalPriceETB.toStringAsFixed(0)}';
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -111,7 +130,7 @@ class PaymentScreen extends StatelessWidget {
                               const Text('ASSIGNED SLOT', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
                               const SizedBox(height: 4),
                               Text(
-                                slotNumber,
+                                effectiveSlot,
                                 style: const TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
@@ -159,7 +178,7 @@ class PaymentScreen extends StatelessWidget {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             QrImageView(
-                              data: passCode,
+                              data: qrData,
                               version: QrVersions.auto,
                               size: 160.0,
                               eyeStyle: const QrEyeStyle(
@@ -173,7 +192,7 @@ class PaymentScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              passCode,
+                              displayPassCode,
                               style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,

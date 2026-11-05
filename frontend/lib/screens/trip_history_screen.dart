@@ -282,6 +282,9 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> with SingleTicker
                                     qrCodeData: booking.qrCodeData,
                                     txRef: 'REF-${booking.id}',
                                     paymentMethod: 'Telebirr / Chapa',
+                                    startTime: booking.startTime,
+                                    endTime: booking.endTime,
+                                    slotNumber: booking.slotNumber,
                                   ),
                                 ),
                               );

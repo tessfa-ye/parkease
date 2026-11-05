@@ -22,6 +22,7 @@ class _ActiveParkingSessionCardState extends State<ActiveParkingSessionCard> {
   late Duration _remaining;
   bool _isUpcoming = false;
   Duration _remainingUntilStart = Duration.zero;
+  Duration _graceRemaining = Duration.zero;
 
   @override
   void initState() {
@@ -59,10 +60,27 @@ class _ActiveParkingSessionCardState extends State<ActiveParkingSessionCard> {
     if (_isUpcoming) {
       _remainingUntilStart = _booking.startTime.difference(now);
       _remaining = _booking.endTime.difference(_booking.startTime);
+      _graceRemaining = Duration.zero;
     } else {
       _remainingUntilStart = Duration.zero;
       final diff = _booking.endTime.difference(now);
       _remaining = diff.isNegative ? Duration.zero : diff;
+
+      if (_remaining == Duration.zero) {
+        // 15-minute grace period after parking ends
+        final graceDeadline = _booking.endTime.add(const Duration(minutes: 15));
+        if (now.isAfter(graceDeadline)) {
+          _graceRemaining = Duration.zero;
+          // Auto complete and free spot!
+          BookingStore.instance.completeBooking(_booking.id);
+          HostSpaceStore.instance.releaseBooking(_booking.spot.id);
+          ApiService.checkOutBooking(_booking.id);
+        } else {
+          _graceRemaining = graceDeadline.difference(now);
+        }
+      } else {
+        _graceRemaining = Duration.zero;
+      }
     }
   }
 
@@ -71,6 +89,12 @@ class _ActiveParkingSessionCardState extends State<ActiveParkingSessionCard> {
     final minutes = d.inMinutes.remainder(60);
     final seconds = d.inSeconds.remainder(60);
     return '${hours.toString().padLeft(2, '0')}h : ${minutes.toString().padLeft(2, '0')}m : ${seconds.toString().padLeft(2, '0')}s';
+  }
+
+  String _formatGraceDuration(Duration d) {
+    final minutes = d.inMinutes;
+    final seconds = d.inSeconds.remainder(60);
+    return '${minutes.toString().padLeft(2, '0')}m : ${seconds.toString().padLeft(2, '0')}s';
   }
 
   Color get _statusColor {
@@ -92,6 +116,9 @@ class _ActiveParkingSessionCardState extends State<ActiveParkingSessionCard> {
           bookingId: _booking.id,
           qrCodeData: _booking.qrCodeData,
           txRef: _booking.txRef,
+          startTime: _booking.startTime,
+          endTime: _booking.endTime,
+          slotNumber: _booking.slotNumber,
         ),
       ),
     );
@@ -258,6 +285,19 @@ class _ActiveParkingSessionCardState extends State<ActiveParkingSessionCard> {
                               additionalHours: selectedHours,
                               additionalAmount: totalCost,
                             );
+                            final now = DateTime.now();
+                            final baseTime = _booking.endTime.isBefore(now) ? now : _booking.endTime;
+                            final newEndTime = baseTime.add(Duration(hours: selectedHours));
+                            
+                            setState(() {
+                              _booking = _booking.copyWith(
+                                endTime: newEndTime,
+                                durationHours: _booking.durationHours + selectedHours,
+                                totalPriceETB: _booking.totalPriceETB + totalCost,
+                              );
+                              _calculateRemaining();
+                            });
+
                             BookingStore.instance.extendBooking(
                               widget.booking.id,
                               selectedHours,
@@ -419,10 +459,14 @@ class _ActiveParkingSessionCardState extends State<ActiveParkingSessionCard> {
                 Text(
                   _isUpcoming
                       ? 'Starts in ${_formatDuration(_remainingUntilStart)}'
-                      : (isExpired ? 'Parking Time Expired' : _formatDuration(_remaining)),
+                      : (isExpired
+                          ? (_graceRemaining > Duration.zero
+                              ? 'Expired • Auto-checkout in ${_formatGraceDuration(_graceRemaining)}'
+                              : 'Session Completed')
+                          : _formatDuration(_remaining)),
                   style: TextStyle(
                     fontFamily: 'monospace',
-                    fontSize: 14,
+                    fontSize: 13,
                     fontWeight: FontWeight.bold,
                     color: _statusColor,
                   ),

@@ -205,6 +205,9 @@ class _BookingConfirmationScreenState extends State<BookingConfirmationScreen> {
           qrCodeData: qrCode ?? _pendingQrCodeData,
           txRef: _pendingTxRef,
           paymentMethod: _selectedPaymentMethod,
+          startTime: _pendingBooking?.startTime,
+          endTime: _pendingBooking?.endTime,
+          slotNumber: _pendingBooking?.slotNumber,
         ),
       ),
     );
