@@ -6,7 +6,9 @@ import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../services/host_space_store.dart';
 import '../services/booking_store.dart';
+import '../services/attendant_store.dart';
 import 'host_registration_screen.dart';
+import 'attendant_scanner_screen.dart';
 
 class HostDashboardScreen extends StatefulWidget {
   const HostDashboardScreen({super.key});
@@ -31,12 +33,14 @@ class _HostDashboardScreenState extends State<HostDashboardScreen> {
     _loadDashboardData();
     BookingStore.instance.addListener(_onStoreUpdate);
     HostSpaceStore.instance.addListener(_onStoreUpdate);
+    AttendantStore.instance.addListener(_onStoreUpdate);
   }
 
   @override
   void dispose() {
     BookingStore.instance.removeListener(_onStoreUpdate);
     HostSpaceStore.instance.removeListener(_onStoreUpdate);
+    AttendantStore.instance.removeListener(_onStoreUpdate);
     super.dispose();
   }
 
@@ -110,6 +114,24 @@ class _HostDashboardScreenState extends State<HostDashboardScreen> {
     }
     return _totalBookings + liveCount;
   }
+
+  int get _verifiedEntriesCount {
+    return BookingStore.instance.activeBookings.length;
+  }
+
+  int get _completedExitsCount {
+    return BookingStore.instance.completedBookings.length;
+  }
+
+  int get _overstayFlaggedCount {
+    final now = DateTime.now();
+    return BookingStore.instance.activeBookings
+        .where((b) => now.isAfter(b.endTime))
+        .length;
+  }
+
+  double get _telebirrRevenue => _computedEarnings * 0.65;
+  double get _cbeBirrRevenue => _computedEarnings * 0.35;
 
   Future<void> _loadDashboardData() async {
     setState(() => _isLoading = true);
@@ -251,6 +273,197 @@ class _HostDashboardScreenState extends State<HostDashboardScreen> {
     );
   }
 
+  void _showAddAttendantModal() {
+    final nameCtrl = TextEditingController();
+    final gateCtrl = TextEditingController(text: 'Main Barrier Gate');
+    final phoneCtrl = TextEditingController();
+    final pinCtrl = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 24,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Add Gate Attendant',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Create login PIN for your gate employee',
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Staff Name',
+                  hintText: 'e.g. Dawit Girma',
+                  prefixIcon: Icon(Icons.person_outline),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: gateCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Assigned Gate / Location',
+                  hintText: 'e.g. Main Entrance Gate 1',
+                  prefixIcon: Icon(Icons.meeting_room_outlined),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: phoneCtrl,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  labelText: 'Phone Number',
+                  hintText: '+251 9... or +251 7...',
+                  prefixIcon: Icon(Icons.phone_outlined),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: pinCtrl,
+                keyboardType: TextInputType.number,
+                maxLength: 4,
+                decoration: const InputDecoration(
+                  labelText: 'Create 4-Digit Passcode (PIN)',
+                  hintText: 'e.g. 1234, 4321',
+                  prefixIcon: Icon(Icons.lock_outline),
+                  helperText: 'Attendant will use this PIN to access Gate Scanner',
+                ),
+              ),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    final name = nameCtrl.text.trim();
+                    final gate = gateCtrl.text.trim();
+                    final phone = phoneCtrl.text.trim();
+                    final pin = pinCtrl.text.trim();
+
+                    if (name.isEmpty || pin.length != 4) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Please enter attendant name and a 4-digit PIN!'),
+                          backgroundColor: Color(0xFFEF4444),
+                        ),
+                      );
+                      return;
+                    }
+
+                    AttendantStore.instance.addAttendant(
+                      name: name,
+                      phone: phone.isNotEmpty ? phone : '+251 90 000 0000',
+                      gate: gate.isNotEmpty ? gate : 'Gate 1',
+                      pin: pin,
+                    );
+
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Attendant "$name" registered with PIN $pin'),
+                        backgroundColor: const Color(0xFF10B981),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.person_add),
+                  label: const Text('Save & Issue Passcode'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2563EB),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showEditPinDialog(AttendantStaff staff) {
+    final pinCtrl = TextEditingController(text: staff.pin);
+
+    showDialog(
+      context: context,
+      builder: (dlgCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Change PIN for ${staff.name}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Current Gate: ${staff.gate}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+            const SizedBox(height: 14),
+            TextField(
+              controller: pinCtrl,
+              keyboardType: TextInputType.number,
+              maxLength: 4,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'New 4-Digit PIN',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.pin),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dlgCtx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final newPin = pinCtrl.text.trim();
+              if (newPin.length == 4) {
+                AttendantStore.instance.updatePin(staff.id, newPin);
+                Navigator.pop(dlgCtx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('PIN updated for ${staff.name} to $newPin'),
+                    backgroundColor: const Color(0xFF10B981),
+                  ),
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('PIN must be 4 digits')),
+                );
+              }
+            },
+            child: const Text('Update PIN'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final hostName = AuthService.instance.name ?? 'Abebe Kebede';
@@ -379,6 +592,384 @@ class _HostDashboardScreenState extends State<HostDashboardScreen> {
                         ),
                       ],
                     ),
+                  ),
+
+                  const SizedBox(height: 18),
+
+                  // Owner Payment & Attendant Control Section
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: const Color(0xFF2563EB).withValues(alpha: 0.2)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.03),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF2563EB).withValues(alpha: 0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.security, color: Color(0xFF2563EB), size: 20),
+                            ),
+                            const SizedBox(width: 10),
+                            const Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Owner Payment Control',
+                                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                                  ),
+                                  Text(
+                                    '100% Digital • Zero Cash Handling by Attendant',
+                                    style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Text(
+                                'SETTLED',
+                                style: TextStyle(color: Color(0xFF10B981), fontSize: 10, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        // Payment Channel Breakdown
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.grey.shade200),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: const [
+                                        Icon(Icons.phone_android, size: 14, color: Color(0xFF0072CE)),
+                                        SizedBox(width: 4),
+                                        Text('Telebirr (65%)', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '${_telebirrRevenue.toStringAsFixed(0)} $_currency',
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0072CE)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Container(width: 1, height: 32, color: Colors.grey.shade300),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: const [
+                                        Icon(Icons.account_balance, size: 14, color: Color(0xFF8B1D41)),
+                                        SizedBox(width: 4),
+                                        Text('CBE Birr (35%)', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '${_cbeBirrRevenue.toStringAsFixed(0)} $_currency',
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF8B1D41)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        // Attendant Employee Operations Bar
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'ATTENDANT GATE OPERATIONS',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondary, letterSpacing: 0.5),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.shade50,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Text('Gate 1 Shift', style: TextStyle(fontSize: 10, color: Color(0xFF2563EB), fontWeight: FontWeight.w600)),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _buildOperationMetric(
+                                label: 'Verified In',
+                                value: '$_verifiedEntriesCount',
+                                icon: Icons.login,
+                                color: const Color(0xFF10B981),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: _buildOperationMetric(
+                                label: 'Exited',
+                                value: '$_completedExitsCount',
+                                icon: Icons.logout,
+                                color: const Color(0xFF2563EB),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: _buildOperationMetric(
+                                label: 'Overstay',
+                                value: '$_overstayFlaggedCount',
+                                icon: Icons.warning_amber_rounded,
+                                color: _overstayFlaggedCount > 0 ? const Color(0xFFEF4444) : Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        // Quick Action for Owner to Scan directly
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const AttendantScannerScreen()),
+                            ),
+                            icon: const Icon(Icons.qr_code_scanner, color: Color(0xFF2563EB)),
+                            label: const Text(
+                              'Open Gate Scanner (Owner Direct Access)',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: Color(0xFF2563EB)),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Gate Attendants & Passwords Section
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'GATE ATTENDANTS & PASSWORDS',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textSecondary, letterSpacing: 1),
+                      ),
+                      TextButton.icon(
+                        onPressed: _showAddAttendantModal,
+                        icon: const Icon(Icons.person_add, size: 16),
+                        label: const Text('Add Attendant'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
+                  ListenableBuilder(
+                    listenable: AttendantStore.instance,
+                    builder: (context, _) {
+                      final staffList = AttendantStore.instance.staff;
+                      if (staffList.isEmpty) {
+                        return Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: const Center(
+                            child: Text(
+                              'No attendants added yet.\nTap "+ Add Attendant" to create staff passcodes.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                            ),
+                          ),
+                        );
+                      }
+
+                      return Column(
+                        children: staffList.map((staff) {
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            child: Padding(
+                              padding: const EdgeInsets.all(14),
+                              child: Column(
+                                children: [
+                                  Row(
+                                    children: [
+                                      Container(
+                                        width: 42,
+                                        height: 42,
+                                        decoration: BoxDecoration(
+                                          color: staff.isActive
+                                              ? const Color(0xFF2563EB).withValues(alpha: 0.1)
+                                              : Colors.grey.shade200,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: Icon(
+                                          Icons.badge,
+                                          color: staff.isActive ? const Color(0xFF2563EB) : Colors.grey,
+                                          size: 22,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Text(
+                                                  staff.name,
+                                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                                ),
+                                                const SizedBox(width: 6),
+                                                if (!staff.isActive)
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.grey.shade200,
+                                                      borderRadius: BorderRadius.circular(4),
+                                                    ),
+                                                    child: const Text('Inactive', style: TextStyle(fontSize: 9, color: Colors.grey)),
+                                                  ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              '${staff.gate} • ${staff.phone}',
+                                              style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      // Daily Verified Count Badge
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Column(
+                                          children: [
+                                            Text(
+                                              '${staff.scansToday}',
+                                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF10B981)),
+                                            ),
+                                            const Text(
+                                              'Scans Today',
+                                              style: TextStyle(fontSize: 8, color: Color(0xFF10B981), fontWeight: FontWeight.w600),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const Divider(height: 18),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      // Staff PIN display & change
+                                      InkWell(
+                                        onTap: () => _showEditPinDialog(staff),
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                          decoration: BoxDecoration(
+                                            color: Colors.amber.shade50,
+                                            borderRadius: BorderRadius.circular(8),
+                                            border: Border.all(color: Colors.amber.shade300),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Icon(Icons.key, size: 14, color: Color(0xFFB45309)),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                'PIN: ${staff.pin}',
+                                                style: const TextStyle(
+                                                  fontFamily: 'monospace',
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 12,
+                                                  color: Color(0xFFB45309),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 4),
+                                              const Icon(Icons.edit, size: 12, color: Color(0xFFB45309)),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          TextButton(
+                                            onPressed: () => AttendantStore.instance.toggleActive(staff.id),
+                                            style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                                            child: Text(
+                                              staff.isActive ? 'Suspend' : 'Activate',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                color: staff.isActive ? Colors.grey : const Color(0xFF10B981),
+                                              ),
+                                            ),
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(Icons.delete_outline, size: 18, color: Colors.grey),
+                                            onPressed: () => AttendantStore.instance.removeAttendant(staff.id),
+                                            tooltip: 'Remove attendant',
+                                            visualDensity: VisualDensity.compact,
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      );
+                    },
                   ),
 
                   const SizedBox(height: 28),
@@ -605,6 +1196,38 @@ class _HostDashboardScreenState extends State<HostDashboardScreen> {
         const SizedBox(height: 1),
         Text(label, style: const TextStyle(fontSize: 11, color: Colors.white70)),
       ],
+    );
+  }
+
+  Widget _buildOperationMetric({
+    required String label,
+    required String value,
+    required IconData icon,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: color),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
     );
   }
 }

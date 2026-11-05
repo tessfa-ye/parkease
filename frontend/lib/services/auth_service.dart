@@ -21,8 +21,20 @@ class AuthService extends ChangeNotifier {
   String? get token => _token;
   String? get phone => _phone;
   String? get name => _name;
-  String? get role => _role;
+  String get role => _role ?? 'DRIVER';
   bool get isAuthenticated => _token != null && _token!.isNotEmpty;
+
+  bool get isDriver => role == 'DRIVER' || role == 'USER';
+  bool get isAttendant => role == 'ATTENDANT';
+  bool get isOwner => role == 'OWNER' || role == 'HOST';
+
+  /// Switch the active role mode (DRIVER, ATTENDANT, OWNER)
+  Future<void> switchRole(String newRole) async {
+    _role = newRole;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyRole, newRole);
+    notifyListeners();
+  }
 
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
