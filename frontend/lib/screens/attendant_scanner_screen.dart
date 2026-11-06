@@ -4,6 +4,7 @@ import '../theme/app_theme.dart';
 import '../services/api_service.dart';
 import '../services/booking_store.dart';
 import '../services/host_space_store.dart';
+import '../services/attendant_store.dart';
 
 class AttendantScannerScreen extends StatefulWidget {
   const AttendantScannerScreen({super.key});
@@ -12,7 +13,9 @@ class AttendantScannerScreen extends StatefulWidget {
   State<AttendantScannerScreen> createState() => _AttendantScannerScreenState();
 }
 
-class _AttendantScannerScreenState extends State<AttendantScannerScreen> {
+class _AttendantScannerScreenState extends State<AttendantScannerScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
   final MobileScannerController _controller = MobileScannerController(
     detectionSpeed: DetectionSpeed.normal,
     facing: CameraFacing.back,
@@ -23,16 +26,30 @@ class _AttendantScannerScreenState extends State<AttendantScannerScreen> {
   final TextEditingController _manualInputCtrl = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    AttendantStore.instance.addListener(_onLogUpdate);
+  }
+
+  @override
   void dispose() {
+    _tabController.dispose();
     _controller.dispose();
     _manualInputCtrl.dispose();
+    AttendantStore.instance.removeListener(_onLogUpdate);
     super.dispose();
   }
 
+  void _onLogUpdate() {
+    if (mounted) setState(() {});
+  }
+
+  // ─── QR Detection ──────────────────────────────────────────────────────────
+
   void _onDetect(BarcodeCapture capture) {
     if (_isProcessing) return;
-    final List<Barcode> barcodes = capture.barcodes;
-    for (final barcode in barcodes) {
+    for (final barcode in capture.barcodes) {
       final code = barcode.rawValue;
       if (code != null && code.isNotEmpty) {
         _processPassCode(code.trim());
@@ -44,7 +61,6 @@ class _AttendantScannerScreenState extends State<AttendantScannerScreen> {
   Future<void> _processPassCode(String rawCode) async {
     setState(() => _isProcessing = true);
 
-    // Always reload from disk to get the latest bookings
     await BookingStore.instance.forceReload();
 
     String passCode = rawCode.trim();
@@ -55,35 +71,30 @@ class _AttendantScannerScreenState extends State<AttendantScannerScreen> {
     int? embeddedDuration;
     double? embeddedPrice;
 
-    // Decode rich QR code payload if present
-    // Format: PARKEASE-PASS-<ID>|EXP:<epochMillis>|SPOT:<title>|SLOT:<slot>|PLATE:<plate>|DUR:<hours>|PRICE:<etb>
     if (passCode.contains('|')) {
       final parts = passCode.split('|');
       passCode = parts[0].trim();
       for (final part in parts.skip(1)) {
-        final trimmed = part.trim();
-        if (trimmed.startsWith('EXP:')) {
-          final ms = int.tryParse(trimmed.substring(4).trim());
-          if (ms != null) {
-            embeddedEndTime = DateTime.fromMillisecondsSinceEpoch(ms);
-          }
-        } else if (trimmed.startsWith('SPOT:')) {
-          embeddedSpot = trimmed.substring(5).trim();
-        } else if (trimmed.startsWith('SLOT:')) {
-          embeddedSlot = trimmed.substring(5).trim();
-        } else if (trimmed.startsWith('PLATE:')) {
-          embeddedPlate = trimmed.substring(6).trim();
-        } else if (trimmed.startsWith('DUR:')) {
-          embeddedDuration = int.tryParse(trimmed.substring(4).trim());
-        } else if (trimmed.startsWith('PRICE:')) {
-          embeddedPrice = double.tryParse(trimmed.substring(6).trim());
+        final t = part.trim();
+        if (t.startsWith('EXP:')) {
+          final ms = int.tryParse(t.substring(4).trim());
+          if (ms != null) embeddedEndTime = DateTime.fromMillisecondsSinceEpoch(ms);
+        } else if (t.startsWith('SPOT:')) {
+          embeddedSpot = t.substring(5).trim();
+        } else if (t.startsWith('SLOT:')) {
+          embeddedSlot = t.substring(5).trim();
+        } else if (t.startsWith('PLATE:')) {
+          embeddedPlate = t.substring(6).trim();
+        } else if (t.startsWith('DUR:')) {
+          embeddedDuration = int.tryParse(t.substring(4).trim());
+        } else if (t.startsWith('PRICE:')) {
+          embeddedPrice = double.tryParse(t.substring(6).trim());
         }
       }
     }
 
     final normalized = passCode.trim().toUpperCase();
 
-    // 1. Search local store (case-insensitive, flexible matching)
     final localMatch = BookingStore.instance.bookings.where((b) {
       final qr = b.qrCodeData.toUpperCase();
       final id = b.id.toUpperCase();
@@ -111,14 +122,11 @@ class _AttendantScannerScreenState extends State<AttendantScannerScreen> {
         'qrCodeData': b.qrCodeData,
       };
     } else {
-      // 2. Try backend API — raw code first, then extract ID after "PASS-"
       Map<String, dynamic>? apiData = await ApiService.lookupPass(passCode);
       if (apiData == null) {
         final m = RegExp(r'PARKEASE-PASS-(.+)$', caseSensitive: false)
             .firstMatch(passCode);
-        if (m != null) {
-          apiData = await ApiService.lookupPass(m.group(1)!);
-        }
+        if (m != null) apiData = await ApiService.lookupPass(m.group(1)!);
       }
 
       if (apiData != null) {
@@ -129,26 +137,19 @@ class _AttendantScannerScreenState extends State<AttendantScannerScreen> {
           'slotNumber': apiData['slotNumber'] ?? 'Slot-01',
           'vehiclePlate': apiData['vehiclePlate'] ?? 'Unknown Vehicle',
           'durationHours': apiData['durationHours'] ?? 2,
-          'totalPriceETB':
-              (apiData['totalAmount'] as num?)?.toDouble() ?? 50.0,
-          'startTime':
-              apiData['startTime'] ?? DateTime.now().toIso8601String(),
+          'totalPriceETB': (apiData['totalAmount'] as num?)?.toDouble() ?? 50.0,
+          'startTime': apiData['startTime'] ?? DateTime.now().toIso8601String(),
           'endTime': apiData['endTime'] ??
-              DateTime.now()
-                  .add(const Duration(hours: 2))
-                  .toIso8601String(),
-          'status':
-              (apiData['status'] ?? 'ACTIVE').toString().toUpperCase(),
+              DateTime.now().add(const Duration(hours: 2)).toIso8601String(),
+          'status': (apiData['status'] ?? 'ACTIVE').toString().toUpperCase(),
           'qrCodeData': passCode,
         };
       } else if (_isParkEaseCode(normalized)) {
-        // 3. Fallback: genuine ParkEase code (offline / cross-device)
         final extractedId = _extractBookingId(normalized);
-        final effectiveEnd = embeddedEndTime ??
-            DateTime.now().add(const Duration(hours: 24));
-        final isEmbeddedExpired = embeddedEndTime != null &&
-            DateTime.now().isAfter(embeddedEndTime);
-
+        final effectiveEnd =
+            embeddedEndTime ?? DateTime.now().add(const Duration(hours: 24));
+        final isEmbeddedExpired =
+            embeddedEndTime != null && DateTime.now().isAfter(embeddedEndTime);
         details = {
           'id': extractedId,
           'spotTitle': embeddedSpot ?? 'ParkEase Parking',
@@ -180,12 +181,13 @@ class _AttendantScannerScreenState extends State<AttendantScannerScreen> {
     }
   }
 
+  // ─── Verification Modal ────────────────────────────────────────────────────
+
   void _showVerificationModal(Map<String, dynamic> b) {
     final status = b['status'] as String? ?? 'ACTIVE';
     final endTime = DateTime.tryParse(b['endTime'].toString());
     final now = DateTime.now();
-    
-    // Check if parking session has expired by status or passed endTime
+
     final bool isExpired = status == 'EXPIRED' ||
         (endTime != null &&
             now.isAfter(endTime) &&
@@ -275,29 +277,30 @@ class _AttendantScannerScreenState extends State<AttendantScannerScreen> {
                   _infoRow('Vehicle Plate', b['vehiclePlate'] ?? '',
                       isHighlighted: true),
                   const Divider(height: 16),
-                  _infoRow(
-                      'Spot', '${b['spotTitle']} (${b['slotNumber']})'),
+                  _infoRow('Spot', '${b['spotTitle']} (${b['slotNumber']})'),
                   const Divider(height: 16),
                   _infoRow('Paid Duration',
                       '${b['durationHours']} hrs (${b['totalPriceETB']} ETB)'),
                   const Divider(height: 16),
-                  _infoRow('Status', displayStatus,
-                      isHighlighted: isExpired),
+                  _infoRow('Status', displayStatus, isHighlighted: isExpired),
                 ],
               ),
             ),
             if (isExpired) ...[
               const SizedBox(height: 14),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
                   color: const Color(0xFFEF4444).withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.25)),
+                  border: Border.all(
+                      color: const Color(0xFFEF4444).withValues(alpha: 0.25)),
                 ),
                 child: Row(
                   children: const [
-                    Icon(Icons.error_outline, color: Color(0xFFEF4444), size: 20),
+                    Icon(Icons.error_outline,
+                        color: Color(0xFFEF4444), size: 20),
                     SizedBox(width: 10),
                     Expanded(
                       child: Text(
@@ -320,7 +323,7 @@ class _AttendantScannerScreenState extends State<AttendantScannerScreen> {
                   child: OutlinedButton.icon(
                     onPressed: () {
                       Navigator.pop(ctx);
-                      _executeCheckOut(b['id'], b['spotId'] ?? '');
+                      _executeCheckOut(b);
                     },
                     icon: const Icon(Icons.logout, size: 18),
                     label: const Text('Check Out (Exit)'),
@@ -335,18 +338,16 @@ class _AttendantScannerScreenState extends State<AttendantScannerScreen> {
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: isExpired
-                        ? null // Disabled when expired!
+                        ? null
                         : () {
                             Navigator.pop(ctx);
-                            _executeCheckIn(b['id']);
+                            _executeCheckIn(b);
                           },
                     icon: Icon(
                       isExpired ? Icons.block : Icons.login,
                       size: 18,
                     ),
-                    label: Text(
-                      isExpired ? 'Extend Required' : 'Verify & Entry',
-                    ),
+                    label: Text(isExpired ? 'Extend Required' : 'Verify & Entry'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF10B981),
                       disabledBackgroundColor: Colors.grey.shade300,
@@ -368,9 +369,22 @@ class _AttendantScannerScreenState extends State<AttendantScannerScreen> {
     });
   }
 
-  void _executeCheckIn(String bookingId) {
+  // ─── Check In / Out (now log-aware) ────────────────────────────────────────
+
+  void _executeCheckIn(Map<String, dynamic> b) {
+    final bookingId = b['id'] as String? ?? '';
     ApiService.checkInBooking(bookingId);
     BookingStore.instance.startBookingNow(bookingId);
+
+    AttendantStore.instance.addLogEntry(
+      bookingId: bookingId,
+      vehiclePlate: b['vehiclePlate'] as String? ?? 'Unknown',
+      spotTitle: b['spotTitle'] as String? ?? 'Parking',
+      slotNumber: b['slotNumber'] as String? ?? '—',
+      action: ScanAction.entry,
+      durationHours: (b['durationHours'] as num?)?.toInt() ?? 1,
+    );
+
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         backgroundColor: Color(0xFF10B981),
@@ -379,12 +393,29 @@ class _AttendantScannerScreenState extends State<AttendantScannerScreen> {
     );
   }
 
-  void _executeCheckOut(String bookingId, String spotId) {
+  void _executeCheckOut(Map<String, dynamic> b) {
+    final bookingId = b['id'] as String? ?? '';
+    final spotId = b['spotId'] as String? ?? '';
+    final endTime = DateTime.tryParse(b['endTime'].toString());
+    final wasOverstay =
+        endTime != null && DateTime.now().isAfter(endTime);
+
     ApiService.checkOutBooking(bookingId);
     BookingStore.instance.completeBooking(bookingId);
     if (spotId.isNotEmpty) {
       HostSpaceStore.instance.releaseBooking(spotId);
     }
+
+    AttendantStore.instance.addLogEntry(
+      bookingId: bookingId,
+      vehiclePlate: b['vehiclePlate'] as String? ?? 'Unknown',
+      spotTitle: b['spotTitle'] as String? ?? 'Parking',
+      slotNumber: b['slotNumber'] as String? ?? '—',
+      action: ScanAction.exit,
+      wasOverstay: wasOverstay,
+      durationHours: (b['durationHours'] as num?)?.toInt() ?? 1,
+    );
+
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         backgroundColor: Color(0xFF10B981),
@@ -393,32 +424,30 @@ class _AttendantScannerScreenState extends State<AttendantScannerScreen> {
     );
   }
 
+  // ─── Helpers ───────────────────────────────────────────────────────────────
+
   Widget _infoRow(String label, String value, {bool isHighlighted = false}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label,
-            style: const TextStyle(
-                fontSize: 13, color: AppColors.textSecondary)),
+            style:
+                const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
         Text(
           value,
           style: TextStyle(
             fontSize: 13,
-            fontWeight:
-                isHighlighted ? FontWeight.bold : FontWeight.w600,
-            color:
-                isHighlighted ? AppColors.primary : AppColors.textPrimary,
+            fontWeight: isHighlighted ? FontWeight.bold : FontWeight.w600,
+            color: isHighlighted ? AppColors.primary : AppColors.textPrimary,
           ),
         ),
       ],
     );
   }
 
-  /// Returns true if the scanned code looks like a genuine ParkEase pass
   bool _isParkEaseCode(String normalized) =>
       normalized.startsWith('PARKEASE-') || normalized.startsWith('PE-');
 
-  /// Extracts a booking ID from a pass code like "PARKEASE-PASS-BK-980563"
   String _extractBookingId(String normalized) {
     final m = RegExp(r'PARKEASE-PASS-(.+)$').firstMatch(normalized);
     return m?.group(1) ?? normalized;
@@ -458,15 +487,32 @@ class _AttendantScannerScreenState extends State<AttendantScannerScreen> {
     );
   }
 
+  // ─── Build ─────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
-    final cutOutSize = MediaQuery.of(context).size.width * 0.72;
-    // Bias the QR frame to the upper portion of the screen
-    final cutOutOffsetY = MediaQuery.of(context).size.height * 0.18;
+    final log = AttendantStore.instance.todayLog;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Scan Pass'),
+        title: const Text('Gate Scanner'),
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: AppColors.primary,
+          labelColor: AppColors.primary,
+          unselectedLabelColor: AppColors.textSecondary,
+          tabs: [
+            const Tab(icon: Icon(Icons.qr_code_scanner), text: 'Scanner'),
+            Tab(
+              icon: Badge(
+                isLabelVisible: log.isNotEmpty,
+                label: Text('${log.length}'),
+                child: const Icon(Icons.history_rounded),
+              ),
+              text: 'Shift Log',
+            ),
+          ],
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.flash_on),
@@ -485,76 +531,315 @@ class _AttendantScannerScreenState extends State<AttendantScannerScreen> {
           ),
         ],
       ),
-      body: Stack(
+      body: TabBarView(
+        controller: _tabController,
+        // Disable swipe on scanner tab so camera drag doesn't switch tabs
+        physics: const NeverScrollableScrollPhysics(),
         children: [
-          // Full-screen camera feed
-          MobileScanner(
-            controller: _controller,
-            onDetect: _onDetect,
+          _buildScannerTab(),
+          _buildShiftLogTab(log),
+        ],
+      ),
+    );
+  }
+
+  // ─── Scanner Tab ───────────────────────────────────────────────────────────
+
+  Widget _buildScannerTab() {
+    final cutOutSize = MediaQuery.of(context).size.width * 0.72;
+    final cutOutOffsetY = MediaQuery.of(context).size.height * 0.18;
+
+    return Stack(
+      children: [
+        MobileScanner(controller: _controller, onDetect: _onDetect),
+        Container(
+          decoration: ShapeDecoration(
+            shape: QrScannerOverlayShape(
+              borderColor: AppColors.primary,
+              borderRadius: 16,
+              borderLength: 30,
+              borderWidth: 6,
+              cutOutSize: cutOutSize,
+              cutOutOffsetY: cutOutOffsetY,
+            ),
           ),
-          // Viewfinder overlay — QR frame biased toward top of screen
-          Container(
-            decoration: ShapeDecoration(
-              shape: QrScannerOverlayShape(
-                borderColor: AppColors.primary,
-                borderRadius: 16,
-                borderLength: 30,
-                borderWidth: 6,
-                cutOutSize: cutOutSize,
-                cutOutOffsetY: cutOutOffsetY,
+        ),
+        Positioned(
+          top: cutOutOffsetY + cutOutSize + 18,
+          left: 24,
+          right: 24,
+          child: Center(
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Text(
+                'Point camera at the driver QR code',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500),
               ),
             ),
           ),
-          // Helper text below the QR frame
-          Positioned(
-            top: cutOutOffsetY + cutOutSize + 18,
-            left: 24,
-            right: 24,
-            child: Center(
-              child: Container(
+        ),
+        Positioned(
+          bottom: 40,
+          left: 0,
+          right: 0,
+          child: Center(
+            child: ElevatedButton.icon(
+              onPressed: _showManualEntryDialog,
+              icon: const Icon(Icons.keyboard),
+              label: const Text('Enter Code Manually'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: AppColors.textPrimary,
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.6),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Text(
-                  'Point camera at the driver QR code',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500),
-                ),
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(30)),
               ),
             ),
           ),
-          // Bottom button — manual code entry
-          Positioned(
-            bottom: 40,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: ElevatedButton.icon(
-                onPressed: _showManualEntryDialog,
-                icon: const Icon(Icons.keyboard),
-                label: const Text('Enter Code Manually'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: AppColors.textPrimary,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 20, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30)),
-                ),
+        ),
+      ],
+    );
+  }
+
+  // ─── Shift Log Tab ─────────────────────────────────────────────────────────
+
+  Widget _buildShiftLogTab(List<ScanLogEntry> log) {
+    final entries = AttendantStore.instance.todayEntries;
+    final exits = AttendantStore.instance.todayExits;
+    final overstays = AttendantStore.instance.todayOverstays;
+
+    return Column(
+      children: [
+        // Summary strip
+        Container(
+          margin: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.06),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
               ),
+            ],
+          ),
+          child: Row(
+            children: [
+              _summaryChip('IN', entries, const Color(0xFF10B981)),
+              const SizedBox(width: 10),
+              _summaryChip('OUT', exits, const Color(0xFF2563EB)),
+              const SizedBox(width: 10),
+              _summaryChip('⚠ OVERSTAY', overstays, const Color(0xFFEF4444)),
+              const Spacer(),
+              Text(
+                _todayLabel(),
+                style: const TextStyle(
+                    fontSize: 11, color: AppColors.textSecondary),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+
+        // Log list
+        Expanded(
+          child: log.isEmpty
+              ? _emptyLog()
+              : ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                  itemCount: log.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (context, i) => _logCard(log[i]),
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _summaryChip(String label, int count, Color color) {
+    return Column(
+      children: [
+        Text(
+          '$count',
+          style: TextStyle(
+              fontSize: 20, fontWeight: FontWeight.bold, color: color),
+        ),
+        Text(label,
+            style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: color.withValues(alpha: 0.8))),
+      ],
+    );
+  }
+
+  Widget _logCard(ScanLogEntry entry) {
+    final isEntry = entry.action == ScanAction.entry;
+    final color = entry.wasOverstay
+        ? const Color(0xFFEF4444)
+        : isEntry
+            ? const Color(0xFF10B981)
+            : const Color(0xFF2563EB);
+
+    final actionLabel = isEntry ? 'IN' : 'OUT';
+    final timeStr =
+        '${entry.scannedAt.hour.toString().padLeft(2, '0')}:${entry.scannedAt.minute.toString().padLeft(2, '0')}';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Action badge
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
             ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  isEntry ? Icons.login_rounded : Icons.logout_rounded,
+                  color: color,
+                  size: 18,
+                ),
+                Text(
+                  actionLabel,
+                  style: TextStyle(
+                      color: color,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+
+          // Details
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  entry.vehiclePlate,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                      color: AppColors.textPrimary),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${entry.spotTitle}  •  ${entry.slotNumber}',
+                  style: const TextStyle(
+                      fontSize: 12, color: AppColors.textSecondary),
+                ),
+                if (entry.wasOverstay) ...[
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEF4444).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Text(
+                      '⚠ Overstay exit',
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFFEF4444),
+                          fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          // Time
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                timeStr,
+                style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: color),
+              ),
+              Text(
+                '${entry.durationHours}h booked',
+                style: const TextStyle(
+                    fontSize: 11, color: AppColors.textSecondary),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
+
+  Widget _emptyLog() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.history_toggle_off_rounded,
+              size: 64, color: Colors.grey.shade300),
+          const SizedBox(height: 14),
+          const Text(
+            'No scans yet today',
+            style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Scan a driver pass to start logging activity',
+            style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _todayLabel() {
+    final now = DateTime.now();
+    final months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return '${now.day} ${months[now.month - 1]}';
+  }
 }
+
+// ─── QR Overlay ───────────────────────────────────────────────────────────────
 
 class QrScannerOverlayShape extends ShapeBorder {
   final Color borderColor;
@@ -563,8 +848,6 @@ class QrScannerOverlayShape extends ShapeBorder {
   final double borderRadius;
   final double borderLength;
   final double cutOutSize;
-  /// How far from the top of the widget the cut-out centre is placed.
-  /// When null the cut-out is centred vertically (original behaviour).
   final double? cutOutOffsetY;
 
   const QrScannerOverlayShape({
@@ -601,7 +884,6 @@ class QrScannerOverlayShape extends ShapeBorder {
       ..style = PaintingStyle.stroke
       ..strokeWidth = borderWidth;
 
-    // Centre of cut-out: either top-biased or true centre
     final centreX = rect.left + width / 2;
     final centreY = cutOutOffsetY != null
         ? rect.top + cutOutOffsetY! + cutOutSize / 2
@@ -624,25 +906,21 @@ class QrScannerOverlayShape extends ShapeBorder {
     final rrect =
         RRect.fromRectAndRadius(cutOutRect, Radius.circular(borderRadius));
     final path = Path()
-      // Top left
       ..moveTo(rrect.left, rrect.top + borderLength)
       ..lineTo(rrect.left, rrect.top + borderRadius)
       ..arcToPoint(Offset(rrect.left + borderRadius, rrect.top),
           radius: Radius.circular(borderRadius))
       ..lineTo(rrect.left + borderLength, rrect.top)
-      // Top right
       ..moveTo(rrect.right - borderLength, rrect.top)
       ..lineTo(rrect.right - borderRadius, rrect.top)
       ..arcToPoint(Offset(rrect.right, rrect.top + borderRadius),
           radius: Radius.circular(borderRadius))
       ..lineTo(rrect.right, rrect.top + borderLength)
-      // Bottom right
       ..moveTo(rrect.right, rrect.bottom - borderLength)
       ..lineTo(rrect.right, rrect.bottom - borderRadius)
       ..arcToPoint(Offset(rrect.right - borderRadius, rrect.bottom),
           radius: Radius.circular(borderRadius))
       ..lineTo(rrect.right - borderLength, rrect.bottom)
-      // Bottom left
       ..moveTo(rrect.left + borderLength, rrect.bottom)
       ..lineTo(rrect.left + borderRadius, rrect.bottom)
       ..arcToPoint(Offset(rrect.left, rrect.bottom - borderRadius),
