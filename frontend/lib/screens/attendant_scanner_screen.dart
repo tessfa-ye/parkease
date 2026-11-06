@@ -6,6 +6,11 @@ import '../services/booking_store.dart';
 import '../services/host_space_store.dart';
 import '../services/attendant_store.dart';
 
+
+
+import '../screens/log_detail_screen.dart';
+
+
 class AttendantScannerScreen extends StatefulWidget {
   const AttendantScannerScreen({super.key});
 
@@ -697,112 +702,123 @@ class _AttendantScannerScreenState extends State<AttendantScannerScreen>
     final timeStr =
         '${entry.scannedAt.hour.toString().padLeft(2, '0')}:${entry.scannedAt.minute.toString().padLeft(2, '0')}';
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => LogDetailScreen(entry: entry),
           ),
-        ],
-      ),
-      child: Row(
-        children: [
-          // Action badge
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withValues(alpha: 0.2)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  isEntry ? Icons.login_rounded : Icons.logout_rounded,
-                  color: color,
-                  size: 18,
-                ),
-                Text(
-                  actionLabel,
-                  style: TextStyle(
-                      color: color,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-
-          // Details
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  entry.vehiclePlate,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                      color: AppColors.textPrimary),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '${entry.spotTitle}  •  ${entry.slotNumber}',
-                  style: const TextStyle(
-                      fontSize: 12, color: AppColors.textSecondary),
-                ),
-                if (entry.wasOverstay) ...[
-                  const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEF4444).withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Text(
-                      '⚠ Overstay exit',
-                      style: TextStyle(
-                          fontSize: 11,
-                          color: Color(0xFFEF4444),
-                          fontWeight: FontWeight.w600),
-                    ),
+          ],
+        ),
+        child: Row(
+          children: [
+            // Action badge
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    isEntry ? Icons.login_rounded : Icons.logout_rounded,
+                    color: color,
+                    size: 18,
+                  ),
+                  Text(
+                    actionLabel,
+                    style: TextStyle(
+                        color: color,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold),
                   ),
                 ],
+              ),
+            ),
+            const SizedBox(width: 12),
+
+            // Details
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    entry.vehiclePlate,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        color: AppColors.textPrimary),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${entry.spotTitle}  •  ${entry.slotNumber}',
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.textSecondary),
+                  ),
+                  if (entry.wasOverstay) ...[
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEF4444).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text(
+                        '⚠ Overstay exit',
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: Color(0xFFEF4444),
+                            fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
+            // Time
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  timeStr,
+                  style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: color),
+                ),
+                Text(
+                  '${entry.durationHours}h booked',
+                  style: const TextStyle(
+                      fontSize: 11, color: AppColors.textSecondary),
+                ),
               ],
             ),
-          ),
-
-          // Time
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                timeStr,
-                style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: color),
-              ),
-              Text(
-                '${entry.durationHours}h booked',
-                style: const TextStyle(
-                    fontSize: 11, color: AppColors.textSecondary),
-              ),
-            ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
+
 
   Widget _emptyLog() {
     return Center(
