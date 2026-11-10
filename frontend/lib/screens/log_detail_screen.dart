@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 import '../services/attendant_store.dart';
 import '../theme/app_theme.dart';
 
 class LogDetailScreen extends StatelessWidget {
   final ScanLogEntry entry;
 
-  const LogDetailScreen({Key? key, required this.entry}) : super(key: key);
+  const LogDetailScreen({super.key, required this.entry});
 
   String _formatDateTime(DateTime dt) {
     return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} '
@@ -13,9 +14,23 @@ class LogDetailScreen extends StatelessWidget {
   }
 
   void _shareLog(BuildContext context) {
-    // Sharing placeholder – show a snack bar
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Sharing not configured.')),
+    final buffer = StringBuffer();
+    buffer.writeln('=== SHIFT LOG ENTRY ===\n');
+    buffer.writeln('Log ID: ${entry.id}');
+    buffer.writeln('Booking ID: ${entry.bookingId}');
+    buffer.writeln('Vehicle Plate: ${entry.vehiclePlate}');
+    buffer.writeln('Spot: ${entry.spotTitle} (${entry.slotNumber})');
+    buffer.writeln('Action: ${entry.action.name.toUpperCase()}');
+    buffer.writeln('Scanned At: ${_formatDateTime(entry.scannedAt)}');
+    buffer.writeln('Duration: ${entry.durationHours} hour(s)');
+    if (entry.wasOverstay) {
+      buffer.writeln('Overstay: Yes');
+    }
+    buffer.writeln('\n=== END LOG ===');
+    
+    Share.share(
+      buffer.toString(),
+      subject: 'Shift Log Entry - ${entry.vehiclePlate}',
     );
   }
 
