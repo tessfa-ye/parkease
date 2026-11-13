@@ -29,7 +29,7 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
   bool _isLoadingSpots = true;
   Position? _currentPosition;
 
-  // Default: Addis Ababa center (used until GPS loads)
+  CameraPosition? _initialCameraPosition;
   static const CameraPosition _defaultPosition = CameraPosition(
     target: LatLng(9.0227, 38.7469),
     zoom: 14.5,
@@ -139,12 +139,21 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Determine initial camera position
+    final CameraPosition initialPos = _initialCameraPosition ??
+        (_currentPosition != null
+            ? CameraPosition(
+                target: LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
+                zoom: 15.0,
+              )
+            : _defaultPosition);
     return Scaffold(
       body: Stack(
         children: [
           // Google Map
           GoogleMap(
-            initialCameraPosition: _defaultPosition,
+            initialCameraPosition: initialPos,
+
             myLocationEnabled: true,
             myLocationButtonEnabled: false,
             mapType: MapType.normal,
@@ -157,6 +166,17 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
             onTap: (_) => setState(() => _selectedSpot = null),
           ),
 
+          // Show placeholder when no spots are loaded (over map)
+          Positioned.fill(
+            child: _spots.isEmpty && !_isLoadingSpots
+                ? const Center(
+                    child: Text(
+                      'No parking spots nearby',
+                      style: TextStyle(fontSize: 16, color: Colors.grey),
+                    ),
+                  )
+                : const SizedBox.shrink(),
+          ),
           // Top Search Bar
           Positioned(
             top: MediaQuery.of(context).padding.top + 8,

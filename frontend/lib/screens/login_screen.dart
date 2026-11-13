@@ -3,7 +3,8 @@ import 'package:intl_phone_field/intl_phone_field.dart';
 import '../theme/app_theme.dart';
 import '../l10n/app_strings.dart';
 import '../services/auth_service.dart';
-import 'main_navigation_shell.dart';
+import '../services/role_provider.dart';
+import 'role_router.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -69,10 +70,15 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = false);
 
     if (res['success'] == true) {
+      // Initialize RoleProvider with user's available roles
+      // In sandbox mode, provide all roles for testing
+      final userRoles = AuthService.instance.userRoles ?? ['USER', 'ATTENDANT', 'OWNER'];
+      RoleProvider.instance.setAvailableRoles(userRoles);
+
       if (mounted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const MainNavigationShell()),
+          MaterialPageRoute(builder: (_) => const RoleRouter()),
         );
       }
     } else {
@@ -251,7 +257,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     onPressed: () {
                       Navigator.pushReplacement(
                         context,
-                        MaterialPageRoute(builder: (_) => const MainNavigationShell()),
+                        MaterialPageRoute(builder: (_) => const RoleRouter()),
                       );
                     },
                     style: OutlinedButton.styleFrom(

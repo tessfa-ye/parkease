@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../l10n/app_strings.dart';
 import '../services/auth_service.dart';
+import '../services/role_provider.dart';
 import '../services/vehicle_store.dart';
 import '../services/attendant_store.dart';
 import 'login_screen.dart';
@@ -17,14 +18,14 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   Color get _roleColor {
-    if (AuthService.instance.isOwner) return const Color(0xFFEA580C);
-    if (AuthService.instance.isAttendant) return const Color(0xFF2563EB);
+    if (RoleProvider.instance.isOwner) return const Color(0xFFEA580C);
+    if (RoleProvider.instance.isAttendant) return const Color(0xFF2563EB);
     return const Color(0xFF10B981);
   }
 
   String get _roleDisplayName {
-    if (AuthService.instance.isOwner) return '🏢 Garage Owner';
-    if (AuthService.instance.isAttendant) return '🎟️ Gate Attendant';
+    if (RoleProvider.instance.isOwner) return '🏢 Garage Owner';
+    if (RoleProvider.instance.isAttendant) return '🎟️ Gate Attendant';
     return '🚗 Driver Mode';
   }
 
@@ -67,10 +68,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   roleKey: 'DRIVER',
                   title: '🚗 Driver Mode',
                   subtitle: 'Explore spots, book parking & use digital pass',
-                  isActive: AuthService.instance.isDriver,
+                  isActive: RoleProvider.instance.isDriver,
                   color: const Color(0xFF10B981),
                   onTap: () async {
-                    await AuthService.instance.switchRole('DRIVER');
+                    await RoleProvider.instance.switchRole(UserRole.driver);
                     if (ctx.mounted) Navigator.pop(ctx);
                   },
                 ),
@@ -79,12 +80,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   roleKey: 'ATTENDANT',
                   title: '🎟️ Gate Attendant Mode',
                   subtitle: 'Scan QR passes at gate & verify entry / exit',
-                  isActive: AuthService.instance.isAttendant,
+                  isActive: RoleProvider.instance.isAttendant,
                   color: const Color(0xFF2563EB),
                   onTap: () async {
                     // If already owner, owner has instant attendant access without PIN!
-                    if (AuthService.instance.isOwner) {
-                      await AuthService.instance.switchRole('ATTENDANT');
+                    if (RoleProvider.instance.isOwner) {
+                      await RoleProvider.instance.switchRole(UserRole.attendant);
                       if (ctx.mounted) Navigator.pop(ctx);
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -104,7 +105,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   roleKey: 'OWNER',
                   title: '🏢 Garage Owner / Host Mode',
                   subtitle: 'Track digital revenue, monitor staff & withdraw',
-                  isActive: AuthService.instance.isOwner,
+                  isActive: RoleProvider.instance.isOwner,
                   color: const Color(0xFFEA580C),
                   onTap: () => _promptRolePasscode(ctx, 'OWNER', '9999', 'Owner Secret PIN: 9999'),
                 ),
@@ -161,7 +162,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               }
 
               if (isValid) {
-                await AuthService.instance.switchRole(targetRole);
+                final userRole = targetRole == 'ATTENDANT' ? UserRole.attendant : UserRole.owner;
+                await RoleProvider.instance.switchRole(userRole);
                 if (dlgCtx.mounted) Navigator.pop(dlgCtx);
                 if (modalCtx.mounted) Navigator.pop(modalCtx);
                 if (mounted) {
@@ -389,7 +391,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           children: [
             // Profile Header with Live User Info
             ListenableBuilder(
-              listenable: AuthService.instance,
+              listenable: RoleProvider.instance,
               builder: (context, _) {
                 final name = AuthService.instance.name?.isNotEmpty == true
                     ? AuthService.instance.name!
@@ -432,7 +434,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '$phone • ${AuthService.instance.isOwner ? "🏢 Garage Owner" : (AuthService.instance.isAttendant ? "🎟️ Gate Attendant" : "🚗 Driver")}',
+                        '$phone • ${RoleProvider.instance.isOwner ? "🏢 Garage Owner" : (RoleProvider.instance.isAttendant ? "🎟️ Gate Attendant" : "🚗 Driver")}',
                         style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
                       ),
                       const SizedBox(height: 12),
@@ -506,10 +508,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
             // Role-based Conditional Sections
             ListenableBuilder(
-              listenable: AuthService.instance,
+              listenable: RoleProvider.instance,
               builder: (context, _) {
-                final isAttendant = AuthService.instance.isAttendant;
-                final isOwner = AuthService.instance.isOwner;
+                final isAttendant = RoleProvider.instance.isAttendant;
+                final isOwner = RoleProvider.instance.isOwner;
 
                 if (isAttendant) {
                   // ATTENDANT VIEW

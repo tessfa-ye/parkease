@@ -12,6 +12,7 @@ import '../services/booking_store.dart';
 import '../services/vehicle_store.dart';
 import '../services/host_space_store.dart';
 import '../services/attendant_store.dart';
+import '../services/role_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,6 +32,7 @@ void main() async {
   await VehicleStore.instance.init();
   await HostSpaceStore.instance.init();
   await AttendantStore.instance.init();
+  await RoleProvider.instance.init();
   runApp(const ParkEaseApp());
 }
 

@@ -12,16 +12,19 @@ class AuthService extends ChangeNotifier {
   static const String _keyPhone = 'auth_phone';
   static const String _keyName = 'auth_name';
   static const String _keyRole = 'auth_role';
+  static const String _keyUserRoles = 'auth_user_roles';
 
   String? _token;
   String? _phone;
   String? _name;
   String? _role;
+  List<String>? _userRoles;
 
   String? get token => _token;
   String? get phone => _phone;
   String? get name => _name;
   String get role => _role ?? 'DRIVER';
+  List<String>? get userRoles => _userRoles;
   bool get isAuthenticated => _token != null && _token!.isNotEmpty;
 
   bool get isDriver => role == 'DRIVER' || role == 'USER';
@@ -42,6 +45,16 @@ class AuthService extends ChangeNotifier {
     _phone = prefs.getString(_keyPhone);
     _name = prefs.getString(_keyName);
     _role = prefs.getString(_keyRole);
+    
+    // Load user roles if available
+    final rolesJson = prefs.getString(_keyUserRoles);
+    if (rolesJson != null) {
+      try {
+        _userRoles = List<String>.from(jsonDecode(rolesJson));
+      } catch (_) {
+        _userRoles = null;
+      }
+    }
     notifyListeners();
   }
 
@@ -137,17 +150,22 @@ class AuthService extends ChangeNotifier {
     required String phone,
     required String name,
     required String role,
+    List<String>? roles,
   }) async {
     _token = token;
     _phone = phone;
     _name = name;
     _role = role;
+    
+    // Set user roles: if provided, use that; otherwise use current role
+    _userRoles = roles ?? [role];
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyToken, token);
     await prefs.setString(_keyPhone, phone);
     await prefs.setString(_keyName, name);
     await prefs.setString(_keyRole, role);
+    await prefs.setString(_keyUserRoles, jsonEncode(_userRoles));
 
     notifyListeners();
   }
@@ -157,12 +175,14 @@ class AuthService extends ChangeNotifier {
     _phone = null;
     _name = null;
     _role = null;
+    _userRoles = null;
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_keyToken);
     await prefs.remove(_keyPhone);
     await prefs.remove(_keyName);
     await prefs.remove(_keyRole);
+    await prefs.remove(_keyUserRoles);
 
     notifyListeners();
   }
